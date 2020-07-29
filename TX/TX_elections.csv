@@ -1,43 +1,42 @@
-Election,Type,Year
-12G_President,General,12
-12G_U.S. Sen,General,12
-12P_U.S. Sen,Primary,12
-12R_U.S. Sen,Runoff,12
-14G_Ag Comm,General,14
-14G_Attorney Gen,General,14
-14G_Comptroller,General,14
-14G_Governor,General,14
-14G_Land Comm,General,14
-14G_Lt. Governor,General,14
-14G_U.S. Sen,General,14
-14P_Ag Comm,Primary,14
-14P_Governor,Primary,14
-14P_U.S. Sen,Primary,14
-14R_Ag Comm,Runoff,14
-14R_U.S. Sen,Runoff,14
-16G_President,General,16
-16P_President,Primary,16
-18G_Ag Comm,General,18
-18G_Attorney Gen,General,18
-18G_Comptroller,General,18
-18G_Governor,General,18
-18G_Land Comm,General,18
-18G_Lt. Governor,General,18
-18G_U.S. Sen,General,18
-18P_Comptroller,Primary,18
-18P_Governor,Primary,18
-18P_Land Comm,Primary,18
-18P_Lt. Governor,Primary,18
-18P_U.S. Sen,Primary,18
-18R_Governor,Runoff,18
-18G_RR Comm 1,General,18
-18P_RR Comm 1,Primary,18
-16G_RR Comm 1,General,16
-16R_RR Comm 1,Runoff,16
-16P_RR Comm 1,Primary,16
-14G_RR Comm 3,General,14
-14P_RR Comm 3,Primary,14
-12G_RR Comm 1,General,12
-12P_RR Comm 1,Primary,12
-12G_RR Comm 2,General,12
-12P_President,Primary,12
+Election,Type,Year,Election Set
+12G_President,General,12,12President
+12G_U.S. Sen,General,12,12U.S. Sen
+12P_U.S. Sen,Primary,12,12U.S. Sen
+12R_U.S. Sen,Runoff,12,12U.S. Sen
+14G_Ag Comm,General,14,14Ag Comm
+14G_Attorney Gen,General,14,14Attorney Gen
+14G_Comptroller,General,14,14Comptroller
+14G_Governor,General,14,14Governor
+14G_Land Comm,General,14,14Land Comm
+14G_Lt. Governor,General,14,14Lt. Governor
+14G_U.S. Sen,General,14,14U.S. Sen
+14P_Ag Comm,Primary,14,14Ag Comm
+14P_Governor,Primary,14,14Governor
+14P_U.S. Sen,Primary,14,14U.S. Sen
+14R_Ag Comm,Runoff,14,14Ag Comm
+14R_U.S. Sen,Runoff,14,14U.S. Sen
+16G_President,General,16,16President
+16P_President,Primary,16,16President
+18G_Ag Comm,General,18,18Ag Comm
+18G_Attorney Gen,General,18,18Attorney Gen
+18G_Comptroller,General,18,18Comptroller
+18G_Governor,General,18,18Governor
+18G_Land Comm,General,18,18Land Comm
+18G_Lt. Governor,General,18,18Lt. Governor
+18G_U.S. Sen,General,18,18U.S. Sen
+18P_Comptroller,Primary,18,18Comptroller
+18P_Governor,Primary,18,18Governor
+18P_Land Comm,Primary,18,18Land Comm
+18P_Lt. Governor,Primary,18,18Lt. Governor
+18P_U.S. Sen,Primary,18,18U.S. Sen
+18R_Governor,Runoff,18,18Governor
+18G_RR Comm 1,General,18,18RR Comm 1
+18P_RR Comm 1,Primary,18,18RR Comm 1
+16G_RR Comm 1,General,16,16RR Comm 1
+16R_RR Comm 1,Runoff,16,16RR Comm 1
+16P_RR Comm 1,Primary,16,16RR Comm 1
+14G_RR Comm 3,General,14,14RR Comm 3
+14P_RR Comm 3,Primary,14,14RR Comm 3
+12G_RR Comm 1,General,12,12RR Comm 1
+12P_RR Comm 1,Primary,12,12RR Comm 1
+12P_President,Primary,12,12President

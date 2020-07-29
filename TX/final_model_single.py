@@ -53,7 +53,10 @@ import time
 import heapq
 import operator
 from operator import itemgetter
+from ER_functions import f, norm_dist_params, ER_run, preferred_cand
 
+
+DIR = ''
 #user inputs
 map_num_test = 0
 display_dist = 28#0 index
@@ -133,7 +136,7 @@ for elec in elections: #only elections we care about
        elec_df = state_df.copy().loc[:, state_df.columns.str.contains(pattern)]
        elec_df["Total"] = elec_df.sum(axis=1)
        if elec == '18P_Governor':
-           elec_df.to_csv("elec test.csv")
+           elec_df.to_csv(DIR + "outputs/elec test.csv")
        for cand in cands:
            if sum(elec_df["{}".format(cand)])/sum(elec_df["Total"]) < cand_drop_thresh:
                cands = [i for i in cands if i != cand]   
@@ -150,7 +153,7 @@ state_df["WCVAP%"] = state_df["WCVAP"]/state_df["CVAP"]
 state_df["HCVAP%"] = state_df["HCVAP"]/state_df["CVAP"]
 state_df["BCVAP%"] = state_df["BCVAP"]/state_df["CVAP"]
             
-state_df.to_csv("state_df.csv")
+state_df.to_csv(DIR + "outputs/state_df.csv")
 
 my_updaters = {
         "population": updaters.Tally(tot_pop, alias = "population")
@@ -175,25 +178,6 @@ def winner(partition, election, elec_cands):
         winners[i] = elec_cands[winner_index]
     return winners
     
-def f(x, dist_list):
-    product = 1
-    for i in dist_list.keys():
-        mean = dist_list[i][0]
-        std = dist_list[i][1]
-        dist_from_mean = abs(x-mean)
-        ro = scipy.stats.norm.cdf(mean+dist_from_mean, mean, std) - scipy.stats.norm.cdf(mean-dist_from_mean, mean, std)
-        product = product*ro
-    return product
-
-def norm_dist_params(y, y_pred, sum_params, pop_weights): #y_predict is vector of predicted values, sum_params is prediction when x = 100%
-    mean = sum_params #predicted value at x = 100%
-    n = len(y)
-    y_resid = [len(pop_weights)*w_i*(y_i - y_hat)**2 for w_i,y_i, y_hat in zip(pop_weights,y,y_pred)]
-    var = sum(y_resid)/(n-2)   
-    std = np.sqrt(var)
-    return mean, std
-
-
 #prepare dataframes for results all for single map
 #df 1B and 1H: rows = elecs, columns = districtss, entry is black or hisp pref cand (map-specific)
 #df 2: winners: rows = elec, columns = districts, entry is winner (note this df is for single map)
@@ -234,7 +218,7 @@ map_winners = map_winners.reset_index(drop = True)
 map_winners["Election"] = elections
 map_winners["Election Set"] = elec_data_trunc["Election Set"]
 map_winners["Election Type"] = elec_data_trunc["Type"]
-map_winners.to_csv("winnersElec.csv")  
+map_winners.to_csv(DIR + "outputs/winnersElec.csv")  
   
 for district in range(num_districts): #get vector of precinct values for each district       
     dist_df = state_df[state_df[assign_test] == district]
@@ -245,7 +229,8 @@ for district in range(num_districts): #get vector of precinct values for each di
     dist_Pbcvap[district] = sum(dist_df["BCVAP"])/sum(dist_df["CVAP"])
     dist_Phcvap[district] = sum(dist_df["HCVAP"])/sum(dist_df["CVAP"])
 ##########################################################################################################                                       
-    #run ER regressions for black and hispanic voters        
+    #run ER regressions for black and Latino voters
+    #determine black and Latino preferred candidates and confidence preferred-cand is correct
     pop_weights = list(dist_df.loc[:,"CVAP"].apply(lambda x: x/sum(dist_df["CVAP"]))) 
     for elec in primary_elecs:             
         #remove points with cand-share-of-cvap >1 (cvap disagg error)
@@ -264,141 +249,26 @@ for district in range(num_districts): #get vector of precinct values for each di
             hisp_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(hisp_share))
             pop_weights_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(pop_weights))
                                 
-        #now regrss cand share of total vote on demo-share-CVAP, black                                                                                     
-            black_share_add = sm.add_constant(black_share_dict[cand])
-            model = sm.WLS(cand_cvap_share_dict[cand], black_share_add, weights = pop_weights_dict[cand])            
-            model = model.fit()
-            cand_cvap_share_pred = model.predict()
-            mean, std = norm_dist_params(cand_cvap_share_dict[cand], cand_cvap_share_pred, sum(model.params), pop_weights_dict[cand])
-            black_norm_params[cand] = [mean,std]
-            if district == display_dist and elec == display_elec:
-                plt.figure(figsize=(12, 6))
-                plt.scatter(black_share_dict[cand], cand_cvap_share_dict[cand], c = pop_weights_dict[cand], cmap = 'viridis_r')  
-                    # scatter plot showing actual data
-                plt.plot(black_share_dict[cand] +[1], list(cand_cvap_share_pred) + [sum(model.params)], 'r', linewidth=2) #extend lin regresssion line to 1
-                plt.xticks(np.arange(0,1.1,.1))
-                plt.yticks(np.arange(0,1.1,.1))
-                plt.xlabel("BCVAP share of Precinct CVAP")
-                plt.ylabel("{}'s share of precinct CVAP".format(cand))
-                plt.title("ER, Black support for {}, district {}".format(cand, district+1))
-                plt.savefig("Black {} support_{}.png".format(cand, district+1))
-            
-            #hisp share line fit/ ER               
-            hisp_share_add = sm.add_constant(hisp_share_dict[cand])
-            model = sm.WLS(cand_cvap_share_dict[cand], hisp_share_add, weights = pop_weights_dict[cand])            
-            model = model.fit()
-            cand_cvap_share_pred = model.predict()
-            mean, std = norm_dist_params(cand_cvap_share_dict[cand], cand_cvap_share_pred, sum(model.params), pop_weights_dict[cand])
-            hisp_norm_params[cand] = [mean,std]
-            if district == display_dist and elec == display_elec:
-                plt.figure(figsize=(12, 6))
-                plt.scatter(hisp_share_dict[cand], cand_cvap_share_dict[cand], c = pop_weights_dict[cand], cmap = 'viridis_r')  
-                    # scatter plot showing actual data
-                plt.plot(hisp_share_dict[cand] +[1], list(cand_cvap_share_pred) + [sum(model.params)], 'r', linewidth=2) #extend lin regresssion line to 1
-                plt.xticks(np.arange(0,1.1,.1))
-                plt.yticks(np.arange(0,1.1,.1))
-                plt.xlabel("HCVAP Share of Precinct CVAP")
-                plt.ylabel("{}'s share of precinct CVAP".format(cand))
-                plt.title("ER, Hisp support for {}, district {}".format(cand, district+1))
-                plt.savefig("Hisp {} support.png".format(cand))
-            
-#####################################################################
+        #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
+            mean, std = ER_run(cand,elec, district, black_share_dict[cand], cand_cvap_share_dict[cand],\
+                   pop_weights_dict[cand], black_norm_params, display_dist, display_elec)
+            black_norm_params[cand] = [mean, std]
+   
+            mean, std = ER_run(cand,elec, district, hisp_share_dict[cand], cand_cvap_share_dict[cand],\
+                   pop_weights_dict[cand], hisp_norm_params, display_dist, display_elec)
+            hisp_norm_params[cand] = [mean, std]
+
         #optimizations for confidence! (W3)
         #populate black pref candidate and confidence in candidate (df 1a and 2aii)
-        #if after dropping candidates under cand_drop_thresh, only one left, that is preferred candidate
-        if len(black_norm_params) == 1:
-            black_pref_cand = list(black_norm_params.keys())[0]
-            black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = 1
-        else:
-            black_norm_params_copy = black_norm_params.copy()
-            dist1_index = max(black_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-            dist1 = black_norm_params_copy[dist1_index]
-            del black_norm_params_copy[dist1_index]
-            dist2_index = max(black_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-            dist2 = black_norm_params_copy[dist2_index]
-            
-            if [0.0,0.0] in list(black_norm_params.values()):
-                blank_index = [k for k,v in black_norm_params.items() if v == [0.0,0.0]][0]
-                del black_norm_params[blank_index]
-                
-            res = scipy.optimize.minimize(lambda x, black_norm_params: -f(x, black_norm_params), (dist1[0]- dist2[0])/2+ dist2[0] , args=(black_norm_params), bounds = [(dist2[0], dist1[0])])       
-            black_er_conf = abs(res.fun)[0]
-            
-            if district == display_dist and elec == display_elec:
-                print("elec", elec)
-                print("candidates", candidates[elec])
-                print("params", black_norm_params)
-                print("black first choice", dist1_index, dist1, dist1_index)
-                print("first conf", black_er_conf)
-                
-                plt.figure(figsize=(12, 6))
-                for j in black_norm_params.keys(): 
-                   # if j != dist1_index and j != dist2_index:
-                   #     continue
-                    mean = black_norm_params[j][0]
-                    std = black_norm_params[j][1]
-                    x = np.linspace(mean - 3*std, mean + 3*std)
-                    plt.plot(x,scipy.stats.norm.pdf(x,black_norm_params[j][0], black_norm_params[j][1]))
-                    plt.axvline(x= mean, color = 'black')
-                    dist_from_mean = abs(res.x[0]-mean)
-                    iq=stats.norm(mean,std)
-                   # section = np.arange(mean-1, mean+1, .01)
-                    section = np.arange(mean-dist_from_mean, mean+dist_from_mean, .01)
-                    plt.fill_between(section,iq.pdf(section)) 
-                plt.title("Black dists")
-                          
-            #final black pref and confidence in choice
-            black_pref_cand = dist1_index
-            black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_er_conf
-            
-        #populate hisp pref candidate and confidence in candidate (df 1b and 2bii)
-        if len(hisp_norm_params) == 1:
-            hisp_pref_cand = list(hisp_norm_params.keys())[0]
-            hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = 1
-        else:
-            hisp_norm_params_copy = hisp_norm_params.copy()
-            dist1_index = max(hisp_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-            dist1 = hisp_norm_params_copy[dist1_index]
-            del hisp_norm_params_copy[dist1_index]
-            dist2_index = max(hisp_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-            dist2 = hisp_norm_params_copy[dist2_index]
-            
-            if [0.0,0.0] in list(hisp_norm_params.values()):
-                blank_index = [k for k,v in hisp_norm_params.items() if v == [0.0,0.0]][0]
-                del hisp_norm_params[blank_index]
-                
-            res = scipy.optimize.minimize(lambda x, hisp_norm_params: -f(x, hisp_norm_params), (dist1[0]- dist2[0])/2+ dist2[0] , args=(hisp_norm_params), bounds = [(dist2[0], dist1[0])])
-            hisp_er_conf = abs(res.fun)[0]
-            if district == display_dist and elec == display_elec:
-                print("elec", elec)
-                print("candidates", candidates[elec])
-                print("params", hisp_norm_params)
-                print("hisp first choice", dist1_index, dist1, dist1_index)
-                print("first conf", hisp_er_conf)
-                
-                plt.figure(figsize=(12, 6))
-                for j in hisp_norm_params.keys():  
-                    if j != dist1_index and j != dist2_index:
-                        continue
-                    mean = hisp_norm_params[j][0]
-                    std = hisp_norm_params[j][1]
-                    x = np.linspace(mean - 3*std, mean + 3*std)
-                    plt.plot(x,scipy.stats.norm.pdf(x,hisp_norm_params[j][0], hisp_norm_params[j][1]))
-                    plt.axvline(x= mean, color = 'black')
-                    dist_from_mean = abs(res.x[0]-mean)
-                    iq=stats.norm(mean,std)
-                   # section = np.arange(mean-1, mean+1, .01)
-                    section = np.arange(mean-dist_from_mean, mean+dist_from_mean, .01)
-                    plt.fill_between(section,iq.pdf(section)) 
-                plt.title("hisp dists")
-            #final hisp pref and confidence in choice
-            hisp_pref_cand = dist1_index
-            hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = hisp_er_conf
-   
+        #if after dropping candidates under cand_drop_thresh, only one left, that is preferred candidate                          
+        black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, display_dist, display_elec)
+        black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+        black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_er_conf
+        
+        hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, display_dist, display_elec)
+        hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+        hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = hisp_er_conf
+                    
     end_time = time.time()      
 #########################################################################################
 #get election weights 1 and 2 and combine for final
@@ -437,7 +307,9 @@ for elec_set in elec_sets:
 #min_cand_W2.to_csv("W2_df.csv")
 #final 2a and 2b election probativity scores
 black_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2.drop(["Election Set"], axis=1)*black_conf_W3.drop(["Election Set"], axis=1)
+black_weight_df["Election Set"] = elec_sets
 hisp_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2.drop(["Election Set"], axis=1)*hisp_conf_W3.drop(["Election Set"], axis=1)    
+hisp_weight_df["Election Set"] = elec_sets
 
 if elec_weighting == 'equal':
     for col in black_weight_df.columns:
@@ -456,6 +328,7 @@ black_pref_wins = pd.DataFrame(columns = range(num_districts))
 black_pref_wins["Election Set"] = elec_sets
 hisp_pref_wins = pd.DataFrame(columns = range(num_districts))
 hisp_pref_wins["Election Set"] = elec_sets
+
 for i in range(num_districts):
     for elec_set in elec_sets:
         black_pref_cand = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, i].values[0]
@@ -463,13 +336,12 @@ for i in range(num_districts):
         
         primary_winner = primary_winners.loc[primary_winners["Election Set"] == elec_set, i].values[0]
         general_winner = general_winners.loc[general_winners["Election Set"] == elec_set, i].values[0]
-        runoff_winner = None if len(runoff_winners[runoff_winners["Election Set"] == elec_set]) == 0 \
+        runoff_winner = None if elec_set not in list(runoff_winners["Election Set"]) \
         else runoff_winners.loc[runoff_winners["Election Set"] == elec_set, i].values[0]
+        
         party_general_winner = cand_race_table.loc[cand_race_table["Candidates"] == general_winner, "Party"].values[0] 
                 
-        #winning conditions:
-        print("black pref cand", black_pref_cand)
-        print("primary winner", primary_winner)
+        #winning conditions (conditions to accrue points for election set/minority group):
         black_pref_wins.at[black_pref_wins["Election Set"] == elec_set, i] = True if \
         ((primary_winner == black_pref_cand) & (general_winner == black_pref_cand) \
         or (primary_winner == black_pref_cand) & (party_general_winner == 'D')) \
@@ -480,12 +352,13 @@ for i in range(num_districts):
         or (primary_winner == hisp_pref_cand) & (party_general_winner == 'D'))\
         else False
         
-black_points_accrued = (black_weight_df*black_pref_wins).drop(['Election Set'], axis =1)   
-hisp_points_accrued = (hisp_weight_df*hisp_pref_wins).drop(['Election Set'], axis =1)   
-    
+black_points_accrued = black_weight_df.drop(['Election Set'], axis = 1)*black_pref_wins.drop(['Election Set'], axis = 1)  
+black_points_accrued["Election Set"] = elec_sets
+hisp_points_accrued = hisp_weight_df.drop(['Election Set'], axis = 1)*hisp_pref_wins.drop(['Election Set'], axis = 1)      
+hisp_points_accrued["Election Set"] = elec_sets
 
 ###################################################################    
-#Compute district probabilities
+#Compute district probabilities: black, Latino, neither and overlap 
 black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum(black_points_accrued[i])/sum(black_weight_df[i]) for i in range(num_districts)]
 hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df[i]) for i in range(num_districts)]   
 
@@ -495,37 +368,33 @@ dist_perc_df = pd.DataFrame(columns = ["District"])
 dist_perc_df["District"] = list(range(1, num_districts+1))
 dist_perc_df["Latino Perc"] = hisp_vra_prob
 dist_perc_df["Black Perc"] = black_vra_prob
-dist_perc_df.to_csv("Dist_perc df.csv")
+dist_perc_df.to_csv(DIR + "outputs/Dist_perc df.csv")
 
 #district deep dive
 district_df = pd.DataFrame(columns = ["Election Set"])
-district_entry = 1
+district_entry = 29
 district = district_entry-1
 district_df["Election Set"] = elec_sets
-#district_df["Winner"] = map_winners[district]
-district_df["Primary Winner"] = primary_winners[district]
-district_df["General Winner"] = general_winners[district]
-district_df["Black cand"] = black_pref_cands_df[district]
-district_df["Hisp cand"] = hisp_pref_cands_df[district]
-district_df["Black pref wins"] = black_pref_wins[district]
-district_df["Hisp pref wins"] = hisp_pref_wins[district]
-  
-district_df["Recency W1"] = recency_W1[district]
-district_df["Min Pref Min Black W2"] = min_cand_black_W2[district] 
-district_df["Min Pref Min Hisp W2"] = min_cand_hisp_W2[district] 
-district_df["Black Conf W3"] = black_conf_W3[district]    
-district_df["Hisp Conf W3"] = hisp_conf_W3[district]  
-
-district_df["Black elec weight"] = black_weight_df[district] 
-district_df["Hisp elec weight"] = hisp_weight_df[district]
-
-district_df["Black points accrued"] = black_points_accrued[district]
-district_df["Hisp points accrued"] = hisp_points_accrued[district]   
+district_df["Primary Winner"] = district_df["Election Set"].map(dict(zip(primary_winners["Election Set"], primary_winners[district])))
+district_df["General Winner"] = district_df["Election Set"].map(dict(zip(general_winners["Election Set"], general_winners[district])))
+district_df["Black cand"] = district_df["Election Set"].map(dict(zip(black_pref_cands_df["Election Set"], black_pref_cands_df[district])))
+district_df["Hisp cand"] = district_df["Election Set"].map(dict(zip(hisp_pref_cands_df["Election Set"], hisp_pref_cands_df[district])))
+district_df["Black pref wins"] = district_df["Election Set"].map(dict(zip(black_pref_wins["Election Set"], black_pref_wins[district])))
+district_df["Hisp pref wins"] = district_df["Election Set"].map(dict(zip(hisp_pref_wins["Election Set"], hisp_pref_wins[district])))
+district_df["Recency W1"] = district_df["Election Set"].map(dict(zip(recency_W1["Election Set"], recency_W1[district])))
+district_df["Min Pref Min Black W2"] = district_df["Election Set"].map(dict(zip(min_cand_black_W2["Election Set"], min_cand_black_W2[district]))) 
+district_df["Min Pref Min Hisp W2"] = district_df["Election Set"].map(dict(zip(min_cand_hisp_W2["Election Set"], min_cand_hisp_W2[district])))
+district_df["Black Conf W3"] =district_df["Election Set"].map(dict(zip(black_conf_W3["Election Set"], black_conf_W3[district])))   
+district_df["Hisp Conf W3"] = district_df["Election Set"].map(dict(zip(hisp_conf_W3["Election Set"], hisp_conf_W3[district])))
+district_df["Black elec weight"] = district_df["Election Set"].map(dict(zip(black_weight_df["Election Set"], black_weight_df[district])))
+district_df["Hisp elec weight"] = district_df["Election Set"].map(dict(zip(hisp_weight_df["Election Set"], hisp_weight_df[district])))
+district_df["Black points accrued"] = district_df["Election Set"].map(dict(zip(black_points_accrued["Election Set"], black_points_accrued[district])))
+district_df["Hisp points accrued"] =  district_df["Election Set"].map(dict(zip(hisp_points_accrued["Election Set"], hisp_points_accrued[district])))
 
 ratio_df = pd.DataFrame(columns = list(dist_perc_df.columns))
 ratio_df.loc[0] =list(dist_perc_df.iloc[district]) 
 
-writer = pd.ExcelWriter("District {} TX model, {}.xlsx".format(district+1, elec_weighting), engine = 'xlsxwriter')
+writer = pd.ExcelWriter(DIR + 'outputs/District {} TX model, {}.xlsx'.format(district+1, elec_weighting), engine = 'xlsxwriter')
 district_df.to_excel(writer, sheet_name = "All")
 
 #ratio_df.to_excel(writer, sheet_name = 'Ratios')
