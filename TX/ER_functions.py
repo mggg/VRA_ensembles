@@ -113,3 +113,13 @@ def preferred_cand(district, elec, cand_norm_params, display_dist, display_elec)
             plt.title("Candidate Distributions {}, {}".format(elec, district))
         
         return pref_cand, pref_confidence
+
+def accrue_points(primary_winner, min_pref_cand, party_general_winner, min_pref_prim_rank, \
+                  runoff_winner, runoff_min_pref, candidates, runoff_race):
+        if runoff_race == None:
+            accrue = ((primary_winner == min_pref_cand) & (party_general_winner == 'D')) 
+        else:
+            accrue = ((min_pref_prim_rank < 3) & (runoff_winner == min_pref_cand) & (party_general_winner == 'D')\
+            or (min_pref_prim_rank < 3) & ((min_pref_cand not in candidates[runoff_race].values())) \
+            & (runoff_winner == runoff_min_pref) & (party_general_winner == 'D'))       
+        return accrue
