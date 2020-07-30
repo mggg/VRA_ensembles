@@ -59,12 +59,13 @@ DIR = ''
 #user inputs
 map_num_test = 0
 display_dist = 28#0 index
+district_deep_dive = 29 #1 index
 display_elec = '16G_President'
 run_name = 'local_test_prob'
 tot_pop = 'TOTPOP_x'
 num_districts = 36
 cand_drop_thresh = 0
-model_mode = 'district' #or district, statewide
+model_mode = 'equal' #or district, statewide
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
 assign_test = "CD" #map to assess (by column title in shapefile)
 #assign_test = "Map{}".format(map_num_test)
@@ -99,7 +100,6 @@ elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Electio
 #stored_plans = pd.read_csv("store_plans_TX_chain_free_NEW.csv")
 
 state_gdf = gpd.read_file(plot_path)
-
 state_gdf["CD"] = [int(i) for i in state_gdf["CD"]]
 #state_gdf["Map{}".format(map_num_test)] = state_gdf.index.map(dict(zip(stored_plans["Index"], stored_plans["Map{}".format(map_num_test)])))
 #to edit cut off shape file columns
@@ -157,10 +157,6 @@ for elec in elections: #only elections we care about
         state_df["{}%CVAP".format(cand)] = state_df["{}".format(cand)]/state_df[cvap_columns[elec_year]['CVAP']]    
         state_df["{}%CVAP".format(cand)] = [min(x,1) for x in list(state_df["{}%CVAP".format(cand)])]
     candidates[elec] = dict(zip(list(range(len(cands))), cands))
-
-#state_df["WCVAP%"] = state_df["WCVAP"]/state_df["CVAP"]
-#state_df["HCVAP%"] = state_df["HCVAP"]/state_df["CVAP"]
-#state_df["BCVAP%"] = state_df["BCVAP"]/state_df["CVAP"]
             
 state_df.to_csv(DIR + "outputs/state_df.csv")
 
@@ -336,7 +332,7 @@ for elec_set in elec_sets:
         min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
         
         neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else \
-                'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial Minority'
+                'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
         min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
 
 
@@ -367,6 +363,9 @@ black_pref_wins["Election Set"] = elec_sets
 hisp_pref_wins = pd.DataFrame(columns = range(num_districts))
 hisp_pref_wins["Election Set"] = elec_sets
 
+primary_second_df = pd.DataFrame(columns = range(num_districts))
+primary_second_df["Election Set"] = elec_sets
+
 for i in range(num_districts):
     for elec_set in elec_sets:
         black_pref_cand = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, i].values[0]
@@ -383,6 +382,9 @@ for i in range(num_districts):
         
         primary_race_shares = dist_elec_results[primary_race][i]
         primary_ranking = {key: rank for rank, key in enumerate(sorted(primary_race_shares, key=primary_race_shares.get, reverse=True), 1)}        
+        second_place_primary = [cand for cand, value in primary_ranking.items() if primary_ranking[cand] == 2]
+        primary_second_df.at[primary_second_df["Election Set"] == elec_set, i] = second_place_primary[0]
+        
         black_pref_prim_share = primary_race_shares[black_pref_cand]
         hisp_pref_prim_share = primary_race_shares[hisp_pref_cand]
         
@@ -433,7 +435,8 @@ final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for
 final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(num_districts)]
 final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(num_districts)]
 ################################################## 
-#District by district probability breakdowns
+#output tables:
+#District by district probability results table
 dist_perc_df = pd.DataFrame(columns = ["District"])
 dist_perc_df["District"] = list(range(1, num_districts+1))
 dist_perc_df["Original Latino Perc"] = hisp_vra_prob
@@ -446,18 +449,21 @@ dist_perc_df.to_csv(DIR + "outputs/Dist_perc df, {} mode.csv".format(model_mode)
 
 #district deep dive
 district_df = pd.DataFrame(columns = ["Election Set"])
-district_entry = 29
+district_entry = district_deep_dive
 district = district_entry-1
 district_df["Election Set"] = elec_sets
 district_df["Primary Winner"] = district_df["Election Set"].map(dict(zip(primary_winners["Election Set"], primary_winners[district])))
+district_df["Primary Second Place"] = district_df["Election Set"].map(dict(zip(primary_second_df["Election Set"], primary_second_df[district])))
 district_df["Runoff Winner"] = district_df["Election Set"].map(dict(zip(runoff_winners["Election Set"], runoff_winners[district])))
 district_df["General Winner"] = district_df["Election Set"].map(dict(zip(general_winners["Election Set"], general_winners[district])))
 district_df["Black pref cand (primary)"] = district_df["Election Set"].map(dict(zip(black_pref_cands_df["Election Set"], black_pref_cands_df[district])))
 district_df["Hisp pref cand (primary)"] = district_df["Election Set"].map(dict(zip(hisp_pref_cands_df["Election Set"], hisp_pref_cands_df[district])))
 district_df["Black pref cand (runoff)"] = district_df["Election Set"].map(dict(zip(black_pref_cands_runoffs["Election Set"], black_pref_cands_runoffs[district])))
 district_df["Hisp pref cand (runoff)"] = district_df["Election Set"].map(dict(zip(hisp_pref_cands_runoffs["Election Set"], hisp_pref_cands_runoffs[district])))
-district_df["Black primary cand wins"] = district_df["Black pref cand (primary)"] == district_df["Primary Winner"]
-district_df["Hisp primary cand wins"] = district_df["Hisp pref cand (primary)"] == district_df["Primary Winner"]
+district_df["Black primary cand top 2"] = [(district_df["Black pref cand (primary)"][i] == district_df["Primary Winner"][i])\
+                                    or  (district_df["Black pref cand (primary)"][i] == district_df["Primary Second Place"][i]) for i in range(len(district_df))]
+district_df["Hisp primary cand top 2"] = [(district_df["Hisp pref cand (primary)"][i] == district_df["Primary Winner"][i])\
+                                     or  (district_df["Hisp pref cand (primary)"][i] == district_df["Primary Second Place"][i]) for i in range(len(district_df))]
 district_df["Black runoff cand wins"] = ["N/A" if pd.isna(district_df["Runoff Winner"][i]) else \
            district_df["Black pref cand (runoff)"][i] == district_df["Runoff Winner"][i] for i in range(len(district_df))]
 district_df["Hisp runoff cand wins"] = ["N/A" if pd.isna(district_df["Runoff Winner"][i]) else \

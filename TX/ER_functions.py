@@ -47,7 +47,7 @@ def norm_dist_params(y, y_pred, sum_params, pop_weights): #y_predict is vector o
     y_resid = [len(pop_weights)*w_i*(y_i - y_hat)**2 for w_i,y_i, y_hat in zip(pop_weights,y,y_pred)]
     var = sum(y_resid)/(n-2)   
     std = np.sqrt(var)
-    return mean, std
+    return mean, std #CHECK- std not var right?
 
 def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
            share_norm_params_dict, display_dist, display_elec):
