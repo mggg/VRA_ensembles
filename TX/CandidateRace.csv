@@ -43,7 +43,7 @@
 41,De La FuenteD_16P_President,Hispanic,,D
 42,ClintonD_16P_President,White,,D
 43,LockeD_16P_President,White,,D
-44,O'MalleyD_16P_President,White,,D
+44,OMalleyD_16P_President,White,,D
 45,SandersD_16P_President,White,,D
 46,WIlsonD_16P_President,Black,,D
 47,HawesD_16P_President,Other,,D
@@ -60,7 +60,7 @@
 58,PatrickR_18G_Lt. Governor,White,,R
 59,CollierD_18G_Lt. Governor,White,,D
 60,CruzR_18G_U.S. Sen,Hispanic,,R
-61,O'RourkeD_18G_U.S. Sen,White,,D
+61,ORourkeD_18G_U.S. Sen,White,,D
 62,MahoneyD_18P_Comptroller,White,,D
 63,ChevalierD_18P_Comptroller,Black,,D
 64,WakelyD_18P_Governor,White,,D
@@ -78,7 +78,7 @@
 76,CollierD_18P_Lt. Governor,White,,D
 77,KimbroughD_18P_U.S. Sen,Black,,D
 78,HernandezD_18P_U.S. Sen,Hispanic,,D
-79,O'RourkeD_18P_U.S. Sen,White,,D
+79,ORourkeD_18P_U.S. Sen,White,,D
 80,ValdezD_18R_Governor,Hispanic,,D
 81,WhiteD_18R_Governor,White,,D
 82,CraddickR_18G_RR Comm 1,White,,R
