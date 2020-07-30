@@ -53,7 +53,7 @@ import heapq
 import operator
 from operator import itemgetter
 from ER_functions import f, norm_dist_params, ER_run, preferred_cand, accrue_points
-
+from ast import literal_eval
 
 DIR = ''
 #user inputs
@@ -64,7 +64,7 @@ run_name = 'local_test_prob'
 tot_pop = 'TOTPOP_x'
 num_districts = 36
 cand_drop_thresh = 0
-elec_weighting = 'equal' #or district, statewide
+model_mode = 'statewide' #or district, statewide
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
 assign_test = "CD" #map to assess (by column title in shapefile)
 #assign_test = "Map{}".format(map_num_test)
@@ -233,7 +233,6 @@ for j in elections:
     values = list(dist_winners[j].values())
     map_winners.loc[len(map_winners)] = [value for _,value in sorted(zip(keys,values))]
     
-
 map_winners = map_winners.reset_index(drop = True)
 map_winners["Election"] = elections
 map_winners["Election Set"] = elec_data_trunc["Election Set"]
@@ -253,34 +252,39 @@ for district in range(num_districts): #get vector of precinct values for each di
     #determine black and Latino preferred candidates and confidence preferred-cand is correct
     pop_weights = list(dist_df.loc[:,"CVAP"].apply(lambda x: x/sum(dist_df["CVAP"]))) 
     for elec in primary_elecs + runoff_elecs:             
-        #remove points with cand-share-of-cvap >1 (cvap disagg error)
-        cand_cvap_share_dict = {}
-        black_share_dict = {}
-        hisp_share_dict = {}
-        pop_weights_dict = {}
-        black_norm_params = {}
-        hisp_norm_params = {}
-        for cand in candidates[elec].values():
-            cand_cvap_share = list(dist_df["{}%CVAP".format(cand)])
-            cand_cvap_share_indices = [i for i,elem in enumerate(cand_cvap_share) if elem <= 1]
-            
-            cand_cvap_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(cand_cvap_share))
-            black_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(black_share))
-            hisp_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(hisp_share))
-            pop_weights_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(pop_weights))
-                                
-        #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
-            mean, std = ER_run(cand,elec, district, black_share_dict[cand], cand_cvap_share_dict[cand],\
-                   pop_weights_dict[cand], black_norm_params, display_dist, display_elec)
-            black_norm_params[cand] = [mean, std]
-   
-            mean, std = ER_run(cand,elec, district, hisp_share_dict[cand], cand_cvap_share_dict[cand],\
-                   pop_weights_dict[cand], hisp_norm_params, display_dist, display_elec)
-            hisp_norm_params[cand] = [mean, std]
+        if model_mode == 'statewide':
+            black_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Black Preferred'].values[0])
+            hisp_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Latino Preferred'].values[0])
+        else:
+            #remove points with cand-share-of-cvap >1 (cvap disagg error)
+            cand_cvap_share_dict = {}
+            black_share_dict = {}
+            hisp_share_dict = {}
+            pop_weights_dict = {}
+            black_norm_params = {}
+            hisp_norm_params = {}
+            for cand in candidates[elec].values():
+                cand_cvap_share = list(dist_df["{}%CVAP".format(cand)])
+                cand_cvap_share_indices = [i for i,elem in enumerate(cand_cvap_share) if elem <= 1]
+                
+                cand_cvap_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(cand_cvap_share))
+                black_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(black_share))
+                hisp_share_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(hisp_share))
+                pop_weights_dict[cand] = list(itemgetter(*cand_cvap_share_indices)(pop_weights))
+                                    
+            #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
+                mean, std = ER_run(cand,elec, district, black_share_dict[cand], cand_cvap_share_dict[cand],\
+                       pop_weights_dict[cand], black_norm_params, display_dist, display_elec)
+                black_norm_params[cand] = [mean, std]
+       
+                mean, std = ER_run(cand,elec, district, hisp_share_dict[cand], cand_cvap_share_dict[cand],\
+                       pop_weights_dict[cand], hisp_norm_params, display_dist, display_elec)
+                hisp_norm_params[cand] = [mean, std]
 
         #optimizations for confidence! (W3)
         #populate black pref candidate and confidence in candidate (df 1a and 2aii)
         #if after dropping candidates under cand_drop_thresh, only one left, that is preferred candidate                          
+        
         black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, display_dist, display_elec)
         hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, display_dist, display_elec)
         if elec in primary_elecs:
@@ -334,7 +338,7 @@ black_weight_df["Election Set"] = elec_sets
 hisp_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2.drop(["Election Set"], axis=1)*hisp_conf_W3.drop(["Election Set"], axis=1)    
 hisp_weight_df["Election Set"] = elec_sets
 
-if elec_weighting == 'equal':
+if model_mode == 'equal':
     for col in black_weight_df.columns[:len(black_weight_df.columns)-1]:
         black_weight_df[col].values[:] = 1
     for col in hisp_weight_df.columns[:len(hisp_weight_df.columns)-1]:
