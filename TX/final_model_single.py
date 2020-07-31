@@ -51,7 +51,6 @@ import intervals as I
 import time
 import heapq
 import operator
-from operator import itemgetter
 from ER_functions import f, norm_dist_params, ER_run, preferred_cand, accrue_points
 from ast import literal_eval
 
@@ -65,7 +64,7 @@ run_name = 'local_test_prob'
 tot_pop = 'TOTPOP_x'
 num_districts = 36
 cand_drop_thresh = 0
-model_mode = 'equal' #or district, statewide
+model_mode = 'district' #or district, statewide
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
 assign_test = "CD" #map to assess (by column title in shapefile)
 #assign_test = "Map{}".format(map_num_test)
@@ -128,8 +127,6 @@ cvap_key = dict(zip(cvap_types,cvap_codes ))
 cvap_years = [2012, 2014, 2016, 2018]
 cvap_columns = {year:  {t: cvap_key[t] + '_' + str(year) for t in cvap_types} for year in cvap_years}
 
-#drop CVAP = 0 precints
-#state_df = state_df[state_df["CVAP"] > 0] #DOUBLE CHECK JUST FOR REGRESSIONS IN CHAIN MODEL!!
 #make candidate dictionary (key is election and value is candidates)
 candidates = {}
 for elec in elections: #only elections we care about
@@ -146,8 +143,8 @@ for elec in elections: #only elections we care about
        pattern = '|'.join(cands)
        elec_df = state_df.copy().loc[:, state_df.columns.str.contains(pattern)]
        elec_df["Total"] = elec_df.sum(axis=1)
-       if elec == '18P_Governor':
-           elec_df.to_csv(DIR + "outputs/elec test.csv")
+    #   if elec == '18P_Governor':
+    #       elec_df.to_csv(DIR + "outputs/elec test.csv")
        for cand in cands:
            if sum(elec_df["{}".format(cand)])/sum(elec_df["Total"]) < cand_drop_thresh:
                cands = [i for i in cands if i != cand]   
@@ -170,18 +167,6 @@ my_updaters.update(election_updaters)
 
 partition = GeographicPartition(graph = graph, assignment = assign_test, updaters = my_updaters)
 num_districts = len(partition)
-
-def winner(partition, election, elec_cands):
-    order = [x for x in partition.parts]
-    perc_for_cand = {}
-    for j in range(len(elec_cands)):
-        perc_for_cand[j] = dict(zip(order, partition[election].percents(j)))
-    winners = {}
-    for i in range(len(partition)):
-        dist_percents = [perc_for_cand[z][i] for z in range(len(elec_cands))]
-        winner_index = dist_percents.index(max(dist_percents))
-        winners[i] = elec_cands[winner_index]
-    return winners
 
 #key: election, value: dictionary with keys = dists and values are dicts of % for each cand
 #for particular elec and dist can access all cand results by: dist_elec_results[elec][dist]
@@ -220,24 +205,36 @@ black_conf_W3 = pd.DataFrame(columns = range(num_districts))
 black_conf_W3["Election Set"] = elec_sets
 hisp_conf_W3 = pd.DataFrame(columns = range(num_districts))
 hisp_conf_W3["Election Set"] = elec_sets    
+#get election weights 1 and 2 and combine for final
+black_weight_df = pd.DataFrame(columns = range(num_districts))
+hisp_weight_df = pd.DataFrame(columns = range(num_districts))
+
+#get weights W1 and W2 for weighting elections.   
+recency_W1 = pd.DataFrame(columns = range(num_districts))
+recency_W1["Election Set"] = elec_sets
+
+min_cand_black_W2 = pd.DataFrame(columns = range(num_districts))
+min_cand_black_W2["Election Set"] = elec_sets
+
+min_cand_hisp_W2 = pd.DataFrame(columns = range(num_districts))
+min_cand_hisp_W2["Election Set"] = elec_sets
+
+min_cand_neither_W2 = pd.DataFrame(columns = range(num_districts))
+min_cand_neither_W2["Election Set"] = elec_sets
 
 start_time = time.time()
 
 #compute district winners
 #df 3 winners (this example just for enacted map)
-dist_winners = {} #adding district winners for each election to that election's df
 map_winners = pd.DataFrame(columns = range(num_districts))
-
-for j in elections:
-    dist_winners[j] = winner(partition, j, candidates[j])
-    keys = list(dist_winners[j].keys())
-    values = list(dist_winners[j].values())
-    map_winners.loc[len(map_winners)] = [value for _,value in sorted(zip(keys,values))]
-    
-map_winners = map_winners.reset_index(drop = True)
 map_winners["Election"] = elections
 map_winners["Election Set"] = elec_data_trunc["Election Set"]
 map_winners["Election Type"] = elec_data_trunc["Type"]
+
+for i in range(num_districts):
+    for elec in elections:
+        results_dict = dist_elec_results[elec][i]
+        map_winners.at[map_winners["Election"] == elec, i] = max(results_dict, key = results_dict.get) 
 map_winners.to_csv(DIR + "outputs/winnersElec.csv")  
   
 for district in range(num_districts): #get vector of precinct values for each district       
@@ -297,22 +294,6 @@ neither_conf_W3 = black_conf_W3.drop(["Election Set"], axis =1)* hisp_conf_W3.dr
 neither_conf_W3["Election Set"] = elec_sets
         
 #########################################################################################
-#get election weights 1 and 2 and combine for final
-black_weight_df = pd.DataFrame(columns = range(num_districts))
-hisp_weight_df = pd.DataFrame(columns = range(num_districts))
-
-#get weights W1 and W2 for weighting elections.   
-recency_W1 = pd.DataFrame(columns = range(num_districts))
-recency_W1["Election Set"] = elec_sets
-
-min_cand_black_W2 = pd.DataFrame(columns = range(num_districts))
-min_cand_black_W2["Election Set"] = elec_sets
-
-min_cand_hisp_W2 = pd.DataFrame(columns = range(num_districts))
-min_cand_hisp_W2["Election Set"] = elec_sets
-
-min_cand_neither_W2 = pd.DataFrame(columns = range(num_districts))
-min_cand_neither_W2["Election Set"] = elec_sets
         
 for elec_set in elec_sets:
     elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)

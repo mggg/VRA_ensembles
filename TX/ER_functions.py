@@ -50,7 +50,7 @@ def norm_dist_params(y, y_pred, sum_params, pop_weights): #y_predict is vector o
     return mean, std #CHECK- std not var right?
 
 def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
-           share_norm_params_dict, display_dist, display_elec):
+           share_norm_params_dict, display_dist = 1, display_elec = 1):
     group_share_add = sm.add_constant(group_share)
     model = sm.WLS(cand_cvap_share, group_share_add, weights = pop_weights)            
     model = model.fit()
@@ -70,7 +70,7 @@ def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
     
     return mean, std
 
-def preferred_cand(district, elec, cand_norm_params, display_dist, display_elec):
+def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1):
     if len(cand_norm_params) == 1:
             pref_cand = list(cand_norm_params.keys())[0]
             pref_confidence = 1
@@ -119,7 +119,6 @@ def accrue_points(primary_winner, min_pref_cand, party_general_winner, min_pref_
         if runoff_race == None:
             accrue = ((primary_winner == min_pref_cand) & (party_general_winner == 'D')) 
         else:
-            accrue = ((min_pref_prim_rank < 3) & (runoff_winner == min_pref_cand) & (party_general_winner == 'D')\
-            or (min_pref_prim_rank < 3) & ((min_pref_cand not in candidates[runoff_race].values())) \
+            accrue = ((min_pref_prim_rank < 3) \
             & (runoff_winner == runoff_min_pref) & (party_general_winner == 'D'))       
         return accrue
