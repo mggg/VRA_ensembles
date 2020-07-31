@@ -77,7 +77,6 @@ SEN18_REP = 'CruzR_18G_U.S. Sen'
 C_X = "C_X"
 C_Y = "C_Y"
 
-
 #run parameters
 start_time_total = time.time()
 total_steps = 20
@@ -93,8 +92,8 @@ ineffect_cutoff = 0 #percent district demo under which assume ineffective
 cand_drop_thresh = 0
 model_mode = 'district' #or district, statewide
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
-start_map = 'random' #sys.argv[9]
-store_score = -2
+start_map = 'enacted' #sys.argv[9]
+store_score = 8
 store_interval = 2000 #how many steps until storage
 stuck_length = 1000 #steps at same score until break
 
@@ -203,33 +202,33 @@ def final_elec_model(partition):
         
     dist_list = range(num_districts) if partition.parent is None else differences
     #map data storage    
-    black_pref_cands_df = pd.DataFrame(columns = range(num_districts))
+    black_pref_cands_df = pd.DataFrame(columns = dist_list)
     black_pref_cands_df["Election Set"] = elec_sets
-    hisp_pref_cands_df = pd.DataFrame(columns = range(num_districts))
+    hisp_pref_cands_df = pd.DataFrame(columns = dist_list)
     hisp_pref_cands_df["Election Set"] = elec_sets
     #store runoff preferences for instances where min-pref candidate needs to switch btwn prim and runoff
-    black_pref_cands_runoffs = pd.DataFrame(columns = range(num_districts))
+    black_pref_cands_runoffs = pd.DataFrame(columns = dist_list)
     black_pref_cands_runoffs["Election Set"] = elec_sets
-    hisp_pref_cands_runoffs = pd.DataFrame(columns = range(num_districts))
+    hisp_pref_cands_runoffs = pd.DataFrame(columns = dist_list)
     hisp_pref_cands_runoffs["Election Set"] = elec_sets
 
     #get weights W1 and W2 for weighting elections.   
-    recency_W1 = pd.DataFrame(columns = range(num_districts))
+    recency_W1 = pd.DataFrame(columns = dist_list)
     recency_W1["Election Set"] = elec_sets
-    min_cand_black_W2 = pd.DataFrame(columns = range(num_districts))
+    min_cand_black_W2 = pd.DataFrame(columns = dist_list)
     min_cand_black_W2["Election Set"] = elec_sets
-    min_cand_hisp_W2 = pd.DataFrame(columns = range(num_districts))
+    min_cand_hisp_W2 = pd.DataFrame(columns = dist_list)
     min_cand_hisp_W2["Election Set"] = elec_sets
-    min_cand_neither_W2 = pd.DataFrame(columns = range(num_districts))
+    min_cand_neither_W2 = pd.DataFrame(columns = dist_list)
     min_cand_neither_W2["Election Set"] = elec_sets
-    black_conf_W3 = pd.DataFrame(columns = range(num_districts))
+    black_conf_W3 = pd.DataFrame(columns = dist_list)
     black_conf_W3["Election Set"] = elec_sets
-    hisp_conf_W3 = pd.DataFrame(columns = range(num_districts))
+    hisp_conf_W3 = pd.DataFrame(columns = dist_list)
     hisp_conf_W3["Election Set"] = elec_sets    
     
     #get election weights 1 and 2 and combine for final
-    black_weight_df = pd.DataFrame(columns = range(num_districts))
-    hisp_weight_df = pd.DataFrame(columns = range(num_districts))
+    black_weight_df = pd.DataFrame(columns = dist_list)
+    hisp_weight_df = pd.DataFrame(columns = dist_list)
     
     #key: election, value: dictionary with keys = dists and values are dicts of % for each cand
     #for particular elec and dist can access all cand results by: dist_elec_results[elec][dist]
@@ -246,7 +245,7 @@ def final_elec_model(partition):
     map_winners["Election"] = elections
     map_winners["Election Set"] = elec_data_trunc["Election Set"]
     map_winners["Election Type"] = elec_data_trunc["Type"]
-    for i in range(num_districts):
+    for i in dist_list:
         for elec in elections:
             results_dict = dist_elec_results[elec][i]
             map_winners.at[map_winners["Election"] == elec, i] = max(results_dict, key = results_dict.get) 
@@ -261,14 +260,12 @@ def final_elec_model(partition):
             elec_year = elec_data_trunc.loc[elec_data_trunc["Election"] == elec, 'Year'].values[0]
     
             cvap = cvap_columns[elec_year]['CVAP']
-            white_cvap = cvap_columns[elec_year]['WCVAP']
             black_cvap = cvap_columns[elec_year]['BCVAP']
             hisp_cvap = cvap_columns[elec_year]['HCVAP']
             
             dist_df = dist_df[dist_df[cvap] > 0] #drop rows with that year's cvap = 0
             black_share = list(dist_df[black_cvap]/dist_df[cvap])
             hisp_share = list(dist_df[hisp_cvap]/dist_df[cvap])
-            white_share = list(dist_df[white_cvap]/dist_df[cvap])  
                    
             #run ER regressions for black and Latino voters
             #determine black and Latino preferred candidates and confidence preferred-cand is correct
@@ -314,24 +311,24 @@ def final_elec_model(partition):
     #get election weights 1 and 2 and combine for final            
     for elec_set in elec_sets:
         elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)
-    for dist in dist_list:      
-        recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
-
-        black_pref = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, dist].values[0]
-        black_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == black_pref, "Race"].values[0]
-        black_pref_black = True if 'Black' in black_pref_race else False        
-        black_cand_weight_type = 'Relevant Minority' if black_pref_black else 'Other'
-        min_cand_black_W2.at[min_cand_black_W2["Election Set"] == elec_set, dist] = min_cand_weights[black_cand_weight_type][0] 
-        
-        hisp_pref = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, dist].values[0]
-        hisp_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == hisp_pref, "Race"].values[0]
-        hisp_pref_hisp = True if 'Hispanic' in hisp_pref_race else False             
-        hisp_cand_weight_type = 'Relevant Minority' if hisp_pref_hisp else 'Other'
-        min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
-        
-        neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else \
-                'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
-        min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
+        for dist in dist_list:      
+            recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
+    
+            black_pref = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, dist].values[0]
+            black_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == black_pref, "Race"].values[0]
+            black_pref_black = True if 'Black' in black_pref_race else False        
+            black_cand_weight_type = 'Relevant Minority' if black_pref_black else 'Other'
+            min_cand_black_W2.at[min_cand_black_W2["Election Set"] == elec_set, dist] = min_cand_weights[black_cand_weight_type][0] 
+            
+            hisp_pref = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, dist].values[0]
+            hisp_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == hisp_pref, "Race"].values[0]
+            hisp_pref_hisp = True if 'Hispanic' in hisp_pref_race else False             
+            hisp_cand_weight_type = 'Relevant Minority' if hisp_pref_hisp else 'Other'
+            min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
+            
+            neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else \
+                    'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
+            min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
 
     #final 2a and 2b election probativity scores
     black_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2.drop(["Election Set"], axis=1)*black_conf_W3.drop(["Election Set"], axis=1)
@@ -340,8 +337,7 @@ def final_elec_model(partition):
     hisp_weight_df["Election Set"] = elec_sets
     neither_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2.drop(["Election Set"], axis=1)*neither_conf_W3.drop(["Election Set"], axis=1)    
     neither_weight_df["Election Set"] = elec_sets
-    
-    
+        
     if model_mode == 'equal':
         for col in black_weight_df.columns[:len(black_weight_df.columns)-1]:
             black_weight_df[col].values[:] = 1
@@ -419,13 +415,13 @@ def final_elec_model(partition):
     hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df[i]) for i in dist_list]   
     neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_list]   
     
-    min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in dist_list]
-    max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in dist_list]
+    min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_list))]
+    max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_list))]
     
-    final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in dist_list]
-    final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in dist_list]
-    final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in dist_list]
-    final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in dist_list]
+    final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_list))]
+    final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_list))]
+    final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_list))]
+    final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_list))]
     
     final_prob_dist_dict = dict(zip(dist_list, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
     final_prob_df_copy = final_prob_df.copy()
@@ -469,7 +465,12 @@ def num_splits(partition, df = state_gdf):
 def vra_score(partition):
     hisp_vra_dists = partition["final_elec_model"][1] 
     black_vra_dists = partition["final_elec_model"][2]    
-    return black_vra_dists + hisp_vra_dists
+    if min_group == 'black':
+        return black_vra_dists
+    if min_group == 'hisp':
+        return hisp_vra_dists
+    if min_group == 'both':
+        return black_vra_dists + hisp_vra_dists
 
 #vra data "output" - chain storage, need to define here
 # for use in old_elec_model updater
@@ -508,7 +509,7 @@ my_updaters = {
 elections_track = [
     Election("PRES16", {"Democratic": 'ClintonD_16G_President' , "Republican": 'TrumpR_16G_President'}, alias = "PRES16"),
     Election("PRES12", {"Democratic": 'ObamaD_12G_President' , "Republican": 'RomneyR_12G_President'}, alias = "PRES12"),
-    Election("SEN18", {"Democratic": "O'RourkeD_18G_U.S. Sen" , "Republican": 'CruzR_18G_U.S. Sen'}, alias = "SEN18"),   
+    Election("SEN18", {"Democratic": "ORourkeD_18G_U.S. Sen" , "Republican": 'CruzR_18G_U.S. Sen'}, alias = "SEN18"),   
 ]
 
 election_updaters = {election.name: election for election in elections_track}
@@ -532,13 +533,6 @@ proposal = partial(
 
 #acceptance functions
 accept = accept.always_accept
-
-def hill_accept(partition):
-    if not partition.parent:
-        return True
-    proposal_vra = partition["vra_score"]
-    parent_vra = partition.parent["vra_score"]
-    return proposal_vra > parent_vra
 
 def hill_accept_bound(partition):
     if not partition.parent:
@@ -576,7 +570,7 @@ chain = MarkovChain(
         constraints.within_percent_of_ideal_population(initial_partition, pop_tol), #% from ideal
     ],
             accept = accept if run_type == 'free' else \
-            hill_accept_bound if run_type == 'hill_accept_bound' \
+            hill_accept_bound if run_type == 'hill_climb' \
             else sim_anneal_accept,
     initial_state = initial_partition,
     total_steps = total_steps
@@ -608,10 +602,6 @@ pres16_df = pd.DataFrame(columns = range(num_districts))
 pres12_df = pd.DataFrame(columns = range(num_districts))
 sen18_df = pd.DataFrame(columns = range(num_districts))
 centroids_df = pd.DataFrame(columns = range(num_districts))
-
-elec_dfs = {}
-for j in elections:
-    elec_dfs[j] =  pd.DataFrame(columns = range(num_districts))
 
 count_moves = 0
 temp_score = 0
@@ -709,7 +699,7 @@ for step in chain:
 store_plans.to_csv("store_plans_{}.csv".format(run_name), index= False)
 
 #store map-wide data
-map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "Num Coal Dists", "County Splits", "VRA score"])
+map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "County Splits", "VRA score"])
 map_metric_df["County Splits"] = county_splits
 map_metric_df["Num Hisp Dists"] = num_hisp_dists
 map_metric_df["Num Black Dists"] = num_black_dists
