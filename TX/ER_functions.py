@@ -50,7 +50,7 @@ def norm_dist_params(y, y_pred, sum_params, pop_weights): #y_predict is vector o
     return mean, std #CHECK- std not var right?
 
 def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
-           share_norm_params_dict, display_dist = 1, display_elec = 1):
+           share_norm_params_dict, display_dist = 1, display_elec = 1,race = 1):
     group_share_add = sm.add_constant(group_share)
     model = sm.WLS(cand_cvap_share, group_share_add, weights = pop_weights)            
     model = model.fit()
@@ -63,14 +63,14 @@ def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
         plt.plot(group_share +[1], list(cand_cvap_share_pred) + [sum(model.params)], 'r', linewidth=2) #extend lin regresssion line to 1
         plt.xticks(np.arange(0,1.1,.1))
         plt.yticks(np.arange(0,1.1,.1))
-        plt.xlabel("BCVAP share of Precinct CVAP")
+        plt.xlabel("{} share of Precinct CVAP".format(race))
         plt.ylabel("{}'s share of precinct CVAP".format(cand))
-        plt.title("ER, Black support for {}, district {}".format(cand, district+1))
-        plt.savefig("Black {} support_{}.png".format(cand, district+1))
+        plt.title("ER, {} support for {}, district {}".format(race, cand, district+1))
+      #  plt.savefig("{} {} support_{}.png".format(race, cand, district+1))
     
     return mean, std
 
-def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1):
+def preferred_cand(district, elec, cand_norm_params, model_mode, display_dist = 1, display_elec = 1, race = 1):
     if len(cand_norm_params) == 1:
             pref_cand = list(cand_norm_params.keys())[0]
             pref_confidence = 1
@@ -80,17 +80,21 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
         dist1 = cand_norm_params_copy[dist1_index]
         del cand_norm_params_copy[dist1_index]
         dist2_index = max(cand_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-        dist2 = cand_norm_params_copy[dist2_index]
-        
-        if [0.0,0.0] in list(cand_norm_params.values()):
-            blank_index = [k for k,v in cand_norm_params.items() if v == [0.0,0.0]][0]
-            del cand_norm_params[blank_index]
-            
-        res = scipy.optimize.minimize(lambda x, cand_norm_params: -f(x, cand_norm_params), \
-                                      (dist1[0]- dist2[0])/2+ dist2[0] , args=(cand_norm_params), \
-                                      bounds = [(dist2[0], dist1[0])])       
+        dist2 = cand_norm_params_copy[dist2_index]        
         pref_cand = dist1_index
-        pref_confidence = abs(res.fun)[0]
+        
+        if model_mode == 'district' or model_mode == 'statewide':
+            if [0.0,0.0] in list(cand_norm_params.values()):
+                blank_index = [k for k,v in cand_norm_params.items() if v == [0.0,0.0]][0]
+                del cand_norm_params[blank_index]
+                
+            res = scipy.optimize.minimize(lambda x, cand_norm_params: -f(x, cand_norm_params), \
+                                          (dist1[0]- dist2[0])/2+ dist2[0] , args=(cand_norm_params), \
+                                          bounds = [(dist2[0], dist1[0])])           
+            pref_confidence = abs(res.fun)[0]
+        
+        else:
+            pref_confidence = 1
         
         if district == display_dist and elec == display_elec:
             print("elec", elec)
@@ -101,6 +105,7 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
             for j in cand_norm_params.keys(): 
                 if j != dist1_index and j != dist2_index:
                     continue
+                print(j)
                 mean = cand_norm_params[j][0]
                 std = cand_norm_params[j][1]
                 x = np.linspace(mean - 3*std, mean + 3*std)
@@ -110,7 +115,7 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
                 iq=stats.norm(mean,std)
                 section = np.arange(mean-dist_from_mean, mean+dist_from_mean, .01)
                 plt.fill_between(section,iq.pdf(section)) 
-            plt.title("Candidate Distributions {}, {}".format(elec, district))
+            plt.title("Candidate Distributions {}, {}, {}".format(elec, district, race))
         
         return pref_cand, pref_confidence
 

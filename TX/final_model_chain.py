@@ -79,23 +79,24 @@ C_Y = "C_Y"
 
 #run parameters
 start_time_total = time.time()
-total_steps = 20
+total_steps = 100
 pop_tol = .005 #U.S. Cong
 assignment1= 'CD'
-run_name = 'Test run, final'#sys.argv[1]
-run_type = 'free' #sys.argv[2]
-min_group = 'black' #sys.argv[4]
+run_name = 'Test run, '#sys.argv[1]
+model_mode = 'district' #or district, statewide
+run_type = 'hill_climb' #sys.argv[2]
+min_group = 'hisp' #sys.argv[4]
 num_districts = 36
 degrandy_hisp = 11 #10.39 rounded up
 degrandy_black = 5 #4.69 rounded up
 ineffect_cutoff = 0 #percent district demo under which assume ineffective
 cand_drop_thresh = 0
-model_mode = 'district' #or district, statewide
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
 start_map = 'enacted' #sys.argv[9]
 store_score = 8
 store_interval = 2000 #how many steps until storage
 stuck_length = 1000 #steps at same score until break
+DIR = ''
 
 #additional parameters for opimization runs:
 #need if running hillclimb with bound
@@ -271,7 +272,7 @@ def final_elec_model(partition):
             #determine black and Latino preferred candidates and confidence preferred-cand is correct
             pop_weights = list(dist_df.loc[:,cvap].apply(lambda x: x/sum(dist_df[cvap])))           
             
-            if model_mode == 'statewide':
+            if model_mode == 'statewide' or model_mode == 'equal':
                 black_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Black Preferred'].values[0])
                 hisp_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Latino Preferred'].values[0])
             else:
@@ -293,8 +294,8 @@ def final_elec_model(partition):
             #populate black pref candidate and confidence in candidate (df 1a and 2aii)
             #if after dropping candidates under cand_drop_thresh, only one left, that is preferred candidate                          
             
-            black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params)
-            hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params)
+            black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, model_mode)
+            hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, model_mode)
             if elec in primary_elecs:
                 black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
                 black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_er_conf
@@ -607,6 +608,7 @@ count_moves = 0
 temp_score = 0
 stuck_step = 0
 step_Num = 0
+best_score = 0
 #run chain and collect data
 for step in chain:
     print(step_Num)
@@ -682,8 +684,10 @@ for step in chain:
     cut_edges.append(step["num_cut_edges"])
 
      #store plans
-    if step["vra_score"] >= store_score:
-        store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
+    if step["vra_score"] > best_score:
+        store_plans["Best Map"] = store_plans["Index"].map(dict(step.assignment))
+        best_score = step["vra_score"]
+        #store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
     if step["vra_score"] == temp_score:
         stuck_step += 1
     else:
@@ -716,9 +720,9 @@ white_prop_df.to_csv("white_prop_df_{}.csv".format(run_name), index= False)
 pres16_df.to_csv("pres16_df_{}.csv".format(run_name), index = False)
 pres12_df.to_csv("pres12_df_{}.csv".format(run_name), index = False)
 sen18_df.to_csv("sen18_df_{}.csv".format(run_name), index = False)
-centroids_df.to_csv("centroids_df_{}.csv".format(run_name), index = False)
+centroids_df.to_csv(DIR + "centroids_df_{}.csv".format(run_name), index = False)
 #vra data
-final_prob_df.to_csv("final_prob_df_{}.csv".format(run_name), index= False)
+final_prob_df.to_csv(DIR + "final_prob_df_{}.csv".format(run_name), index= False)
 ############# final print outs
 print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
 print("total moves", count_moves)
