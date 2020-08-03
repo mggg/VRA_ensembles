@@ -240,7 +240,68 @@ def final_elec_model(partition):
         dist_elec_results[elec] = {}
         outcome_list = [dict(zip(order, partition[elec].percents(cand))) for cand in cands.keys()]      
         dist_elec_results[elec] = {d: {cands[i]: outcome_list[i][d] for i in cands.keys()} for d in range(num_districts)}
- 
+    ##########################################################################################
+    #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes
+    for elec_set in elec_sets:
+        elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)
+        for dist in dist_list:
+            recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
+    
+    if model_mode == 'statewide' or model_mode == 'equal':   
+        for elec in primary_elecs + runoff_elecs:
+            for district in dist_list:
+                if elec in primary_elecs:
+                    black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
+                    hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
+                    black_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Confidence"].values[0]
+                    hisp_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Confidence"].values[0]               
+                    
+                    black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+                    black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
+                    hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+                    hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
+                else:
+                    black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
+                    hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
+                    black_pref_cands_runoffs.at[black_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+                    hisp_pref_cands_runoffs.at[hisp_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+        
+        for elec_set in elec_sets:
+            for dist in dist_list:             
+                black_pref = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, dist].values[0]
+                black_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == black_pref, "Race"].values[0]
+                black_pref_black = True if 'Black' in black_pref_race else False        
+                black_cand_weight_type = 'Relevant Minority' if black_pref_black else 'Other'
+                min_cand_black_W2.at[min_cand_black_W2["Election Set"] == elec_set, dist] = min_cand_weights[black_cand_weight_type][0] 
+                
+                hisp_pref = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, dist].values[0]
+                hisp_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == hisp_pref, "Race"].values[0]
+                hisp_pref_hisp = True if 'Hispanic' in hisp_pref_race else False             
+                hisp_cand_weight_type = 'Relevant Minority' if hisp_pref_hisp else 'Other'
+                min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
+                
+                neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else \
+                        'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
+                min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
+    
+        neither_conf_W3 = black_conf_W3.drop(["Election Set"], axis =1)*hisp_conf_W3.drop(["Election Set"], axis =1)
+        neither_conf_W3["Election Set"] = elec_sets
+        black_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2.drop(["Election Set"], axis=1)*black_conf_W3.drop(["Election Set"], axis=1)
+        black_weight_df["Election Set"] = elec_sets
+        hisp_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2.drop(["Election Set"], axis=1)*hisp_conf_W3.drop(["Election Set"], axis=1)    
+        hisp_weight_df["Election Set"] = elec_sets
+        neither_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2.drop(["Election Set"], axis=1)*neither_conf_W3.drop(["Election Set"], axis=1)    
+        neither_weight_df["Election Set"] = elec_sets
+        
+        if model_mode == 'equal':
+            for col in black_weight_df.columns[:len(black_weight_df.columns)-1]:
+                black_weight_df[col].values[:] = 1
+            for col in hisp_weight_df.columns[:len(hisp_weight_df.columns)-1]:
+                hisp_weight_df[col].values[:] = 1
+            for col in neither_weight_df.columns[:len(neither_weight_df.columns)-1]:
+                neither_weight_df[col].values[:] = 1
+###################################################################################      
+    
     #winners df:
     map_winners = pd.DataFrame(columns = range(num_districts))
     map_winners["Election"] = elections
@@ -252,30 +313,27 @@ def final_elec_model(partition):
             map_winners.at[map_winners["Election"] == elec, i] = max(results_dict, key = results_dict.get) 
     
 
-    for district in dist_list: #get vector of precinct values for each district          
-        state_df2 = state_df.copy()
-        state_df2["Assign"] = state_gdf.index.map(dict(partition.assignment))
-        dist_df = state_df2[state_df2["Assign"] == district]
+    if model_mode == 'district':
+        for district in dist_list: #get vector of precinct values for each district          
+            state_df2 = state_df.copy()
+            state_df2["Assign"] = state_gdf.index.map(dict(partition.assignment))
+            dist_df = state_df2[state_df2["Assign"] == district]
+            
+            for elec in primary_elecs + runoff_elecs:
+                elec_year = elec_data_trunc.loc[elec_data_trunc["Election"] == elec, 'Year'].values[0]
         
-        for elec in primary_elecs + runoff_elecs:
-            elec_year = elec_data_trunc.loc[elec_data_trunc["Election"] == elec, 'Year'].values[0]
-    
-            cvap = cvap_columns[elec_year]['CVAP']
-            black_cvap = cvap_columns[elec_year]['BCVAP']
-            hisp_cvap = cvap_columns[elec_year]['HCVAP']
-            
-            dist_df = dist_df[dist_df[cvap] > 0] #drop rows with that year's cvap = 0
-            black_share = list(dist_df[black_cvap]/dist_df[cvap])
-            hisp_share = list(dist_df[hisp_cvap]/dist_df[cvap])
-                   
-            #run ER regressions for black and Latino voters
-            #determine black and Latino preferred candidates and confidence preferred-cand is correct
-            pop_weights = list(dist_df.loc[:,cvap].apply(lambda x: x/sum(dist_df[cvap])))           
-            
-            if model_mode == 'statewide' or model_mode == 'equal':
-                black_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Black Preferred'].values[0])
-                hisp_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Latino Preferred'].values[0])
-            else:
+                cvap = cvap_columns[elec_year]['CVAP']
+                black_cvap = cvap_columns[elec_year]['BCVAP']
+                hisp_cvap = cvap_columns[elec_year]['HCVAP']
+                
+                dist_df = dist_df[dist_df[cvap] > 0] #drop rows with that year's cvap = 0
+                black_share = list(dist_df[black_cvap]/dist_df[cvap])
+                hisp_share = list(dist_df[hisp_cvap]/dist_df[cvap])
+                       
+                #run ER regressions for black and Latino voters
+                #determine black and Latino preferred candidates and confidence preferred-cand is correct
+                pop_weights = list(dist_df.loc[:,cvap].apply(lambda x: x/sum(dist_df[cvap])))           
+                
                 black_norm_params = {}
                 hisp_norm_params = {}
                 for cand in candidates[elec].values():
@@ -289,61 +347,52 @@ def final_elec_model(partition):
                     mean, std = ER_run(cand,elec, district, hisp_share, cand_cvap_share,\
                            pop_weights, hisp_norm_params)
                     hisp_norm_params[cand] = [mean, std]
-
-            #optimizations for confidence! (W3)
-            #populate black pref candidate and confidence in candidate (df 1a and 2aii)
-            #if after dropping candidates under cand_drop_thresh, only one left, that is preferred candidate                          
-            
-            black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, model_mode)
-            hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, model_mode)
-            if elec in primary_elecs:
-                black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-                black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_er_conf
-                hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-                hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = hisp_er_conf         
-            else:
-                black_pref_cands_runoffs.at[black_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-                hisp_pref_cands_runoffs.at[hisp_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            
-    neither_conf_W3 = black_conf_W3.drop(["Election Set"], axis =1)* hisp_conf_W3.drop(["Election Set"], axis =1)
-    neither_conf_W3["Election Set"] = elec_sets
-             
-#######################################################################################
-    #get election weights 1 and 2 and combine for final            
-    for elec_set in elec_sets:
-        elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)
-        for dist in dist_list:      
-            recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
     
-            black_pref = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, dist].values[0]
-            black_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == black_pref, "Race"].values[0]
-            black_pref_black = True if 'Black' in black_pref_race else False        
-            black_cand_weight_type = 'Relevant Minority' if black_pref_black else 'Other'
-            min_cand_black_W2.at[min_cand_black_W2["Election Set"] == elec_set, dist] = min_cand_weights[black_cand_weight_type][0] 
-            
-            hisp_pref = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, dist].values[0]
-            hisp_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == hisp_pref, "Race"].values[0]
-            hisp_pref_hisp = True if 'Hispanic' in hisp_pref_race else False             
-            hisp_cand_weight_type = 'Relevant Minority' if hisp_pref_hisp else 'Other'
-            min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
-            
-            neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else \
-                    'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
-            min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
-
-    #final 2a and 2b election probativity scores
-    black_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2.drop(["Election Set"], axis=1)*black_conf_W3.drop(["Election Set"], axis=1)
-    black_weight_df["Election Set"] = elec_sets
-    hisp_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2.drop(["Election Set"], axis=1)*hisp_conf_W3.drop(["Election Set"], axis=1)    
-    hisp_weight_df["Election Set"] = elec_sets
-    neither_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2.drop(["Election Set"], axis=1)*neither_conf_W3.drop(["Election Set"], axis=1)    
-    neither_weight_df["Election Set"] = elec_sets
-        
-    if model_mode == 'equal':
-        for col in black_weight_df.columns[:len(black_weight_df.columns)-1]:
-            black_weight_df[col].values[:] = 1
-        for col in hisp_weight_df.columns[:len(hisp_weight_df.columns)-1]:
-            hisp_weight_df[col].values[:] = 1                                        
+                #optimizations for confidence! (W3)
+                #populate black pref candidate and confidence in candidate (df 1a and 2aii)
+                #if after dropping candidates under cand_drop_thresh, only one left, that is preferred candidate                          
+                
+                black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, model_mode)
+                hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, model_mode)
+                if elec in primary_elecs:
+                    black_pref_cands_df.at[black_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+                    black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_er_conf
+                    hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+                    hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = hisp_er_conf         
+                else:
+                    black_pref_cands_runoffs.at[black_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+                    hisp_pref_cands_runoffs.at[hisp_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+                            
+################################################################################
+        #get election weights 1 and 2 and combine for final            
+        for elec_set in elec_sets:
+            for dist in dist_list:      
+                black_pref = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, dist].values[0]
+                black_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == black_pref, "Race"].values[0]
+                black_pref_black = True if 'Black' in black_pref_race else False        
+                black_cand_weight_type = 'Relevant Minority' if black_pref_black else 'Other'
+                min_cand_black_W2.at[min_cand_black_W2["Election Set"] == elec_set, dist] = min_cand_weights[black_cand_weight_type][0] 
+                
+                hisp_pref = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, dist].values[0]
+                hisp_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == hisp_pref, "Race"].values[0]
+                hisp_pref_hisp = True if 'Hispanic' in hisp_pref_race else False             
+                hisp_cand_weight_type = 'Relevant Minority' if hisp_pref_hisp else 'Other'
+                min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
+                
+                neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else \
+                        'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
+                min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
+    
+        #final 2a and 2b election probativity scores
+        neither_conf_W3 = black_conf_W3.drop(["Election Set"], axis =1)* hisp_conf_W3.drop(["Election Set"], axis =1)
+        neither_conf_W3["Election Set"] = elec_sets
+        black_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2.drop(["Election Set"], axis=1)*black_conf_W3.drop(["Election Set"], axis=1)
+        black_weight_df["Election Set"] = elec_sets
+        hisp_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2.drop(["Election Set"], axis=1)*hisp_conf_W3.drop(["Election Set"], axis=1)    
+        hisp_weight_df["Election Set"] = elec_sets
+        neither_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2.drop(["Election Set"], axis=1)*neither_conf_W3.drop(["Election Set"], axis=1)    
+        neither_weight_df["Election Set"] = elec_sets
+                                      
 #################################################################################
     #accrue points for black and hispanic voters if cand-of-choice wins
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
@@ -709,6 +758,7 @@ map_metric_df["Num Hisp Dists"] = num_hisp_dists
 map_metric_df["Num Black Dists"] = num_black_dists
 map_metric_df["VRA score"] = vra_score
 map_metric_df["Cut edges"] = cut_edges
+map_metric_df["Map Num"] = list(range(total_steps))
 map_metric_df.to_csv("map_metric_df_{}.csv".format(run_name), index = False)
 
 #store district-by-district data

@@ -81,25 +81,25 @@ def preferred_cand(district, elec, cand_norm_params, model_mode, display_dist = 
         del cand_norm_params_copy[dist1_index]
         dist2_index = max(cand_norm_params_copy.items(), key=operator.itemgetter(1))[0]
         dist2 = cand_norm_params_copy[dist2_index]        
-        pref_cand = dist1_index
+        pref_cand = dist1_index        
+
+        if [0.0,0.0] in list(cand_norm_params.values()):
+            blank_index = [k for k,v in cand_norm_params.items() if v == [0.0,0.0]][0]
+            del cand_norm_params[blank_index]
+            
+        res = scipy.optimize.minimize(lambda x, cand_norm_params: -f(x, cand_norm_params), \
+                                      (dist1[0]- dist2[0])/2+ dist2[0] , args=(cand_norm_params), \
+                                      bounds = [(dist2[0], dist1[0])])           
+        pref_confidence = abs(res.fun)[0]
         
-        if model_mode == 'district' or model_mode == 'statewide':
-            if [0.0,0.0] in list(cand_norm_params.values()):
-                blank_index = [k for k,v in cand_norm_params.items() if v == [0.0,0.0]][0]
-                del cand_norm_params[blank_index]
-                
-            res = scipy.optimize.minimize(lambda x, cand_norm_params: -f(x, cand_norm_params), \
-                                          (dist1[0]- dist2[0])/2+ dist2[0] , args=(cand_norm_params), \
-                                          bounds = [(dist2[0], dist1[0])])           
-            pref_confidence = abs(res.fun)[0]
-        
-        else:
-            pref_confidence = 1
         
         if district == display_dist and elec == display_elec:
             print("elec", elec)
+            print("race", race)
             print("params", cand_norm_params)
-            print("black first choice", dist1_index, dist1, dist1_index)
+            print("first choice", dist1_index)
+            print("second choice", dist2_index)
+            print("conf in 1st:", pref_confidence)
             
             plt.figure(figsize=(12, 6))
             for j in cand_norm_params.keys(): 

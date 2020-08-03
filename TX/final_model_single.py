@@ -64,7 +64,7 @@ run_name = 'local_test_prob'
 tot_pop = 'TOTPOP_x'
 num_districts = 36
 cand_drop_thresh = 0
-model_mode = 'district' #or district, statewide
+model_mode = 'equal' #or district, statewide
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
 assign_test = "CD" #map to assess (by column title in shapefile)
 #assign_test = "Map{}".format(map_num_test)
@@ -95,12 +95,9 @@ for elec_set in elec_sets:
     elec_set_df = elec_data_trunc[elec_data_trunc["Election Set"] == elec_set]
     elec_set_dict[elec_set] = dict(zip(elec_set_df.Type, elec_set_df.Election))
 elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Election Set"]))
-#for effectiveness on different maps:
-#stored_plans = pd.read_csv("store_plans_TX_chain_free_NEW.csv")
 
 state_gdf = gpd.read_file(plot_path)
 state_gdf["CD"] = [int(i) for i in state_gdf["CD"]]
-#state_gdf["Map{}".format(map_num_test)] = state_gdf.index.map(dict(zip(stored_plans["Index"], stored_plans["Map{}".format(map_num_test)])))
 #to edit cut off shape file columns
 election_return_cols = list(election_returns.columns)
 cand1_index = election_return_cols.index('RomneyR_12G_President') #first
@@ -166,8 +163,6 @@ election_updaters = {election.name: election for election in election_functions}
 my_updaters.update(election_updaters)
 
 partition = GeographicPartition(graph = graph, assignment = assign_test, updaters = my_updaters)
-num_districts = len(partition)
-
 #key: election, value: dictionary with keys = dists and values are dicts of % for each cand
 #for particular elec and dist can access all cand results by: dist_elec_results[elec][dist]
 dist_elec_results = {}
@@ -258,6 +253,14 @@ if model_mode == 'statewide' or model_mode == 'equal':
     hisp_weight_df["Election Set"] = elec_sets
     neither_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2.drop(["Election Set"], axis=1)*neither_conf_W3.drop(["Election Set"], axis=1)    
     neither_weight_df["Election Set"] = elec_sets
+    
+    if model_mode == 'equal':
+        for col in black_weight_df.columns[:len(black_weight_df.columns)-1]:
+            black_weight_df[col].values[:] = 1
+        for col in hisp_weight_df.columns[:len(hisp_weight_df.columns)-1]:
+            hisp_weight_df[col].values[:] = 1
+        for col in neither_weight_df.columns[:len(neither_weight_df.columns)-1]:
+            neither_weight_df[col].values[:] = 1
 ###################################################################################        
 #compute district winners
 #df 3 winners (this example just for enacted map)
@@ -292,23 +295,19 @@ if model_mode == 'district':
             #determine black and Latino preferred candidates and confidence preferred-cand is correct
             pop_weights = list(dist_df.loc[:,cvap].apply(lambda x: x/sum(dist_df[cvap])))           
             
-            if model_mode == 'statewide' or model_mode == 'equal':
-                black_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Black Preferred'].values[0])
-                hisp_norm_params = literal_eval(EI_statewide.loc[EI_statewide["Election"] == elec, 'Latino Preferred'].values[0])
-            else:
-                black_norm_params = {}
-                hisp_norm_params = {}
-                for cand in candidates[elec].values():
-                    cand_cvap_share = list(dist_df["{}%CVAP".format(cand)])
-                              
-                #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
-                    mean, std = ER_run(cand,elec, district, black_share, cand_cvap_share,\
-                           pop_weights, black_norm_params, display_dist, display_elec, race = "Black")
-                    black_norm_params[cand] = [mean, std]
-           
-                    mean, std = ER_run(cand,elec, district, hisp_share, cand_cvap_share,\
-                           pop_weights, hisp_norm_params, display_dist, display_elec, race = "Latino")
-                    hisp_norm_params[cand] = [mean, std]
+            black_norm_params = {}
+            hisp_norm_params = {}
+            for cand in candidates[elec].values():
+                cand_cvap_share = list(dist_df["{}%CVAP".format(cand)])
+                          
+            #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
+                mean, std = ER_run(cand,elec, district, black_share, cand_cvap_share,\
+                       pop_weights, black_norm_params, display_dist, display_elec, race = "Black")
+                black_norm_params[cand] = [mean, std]
+       
+                mean, std = ER_run(cand,elec, district, hisp_share, cand_cvap_share,\
+                       pop_weights, hisp_norm_params, display_dist, display_elec, race = "Latino")
+                hisp_norm_params[cand] = [mean, std]
 
             black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, model_mode, display_dist, display_elec, race = "Black")
             hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, model_mode, display_dist, display_elec, race = "Latino")
@@ -317,12 +316,6 @@ if model_mode == 'district':
                 black_conf_W3.at[black_conf_W3["Election Set"] == elec_match_dict[elec], district] = black_er_conf
                 hisp_pref_cands_df.at[hisp_pref_cands_df["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
                 hisp_conf_W3.at[hisp_conf_W3["Election Set"] == elec_match_dict[elec], district] = hisp_er_conf         
-                
-    #            EI_statewide.at[EI_statewide["Election"] == elec, "Black Pref Cand"] = black_pref_cand
-    #            EI_statewide.at[EI_statewide["Election"] == elec, "Black Confidence"] = black_er_conf
-    #            EI_statewide.at[EI_statewide["Election"] == elec, "Latino Pref Cand"] = hisp_pref_cand
-    #            EI_statewide.at[EI_statewide["Election"] == elec, "Latino Confidence"] = hisp_er_conf
-    #                        
             else:
                 black_pref_cands_runoffs.at[black_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
                 hisp_pref_cands_runoffs.at[hisp_pref_cands_runoffs["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand            
@@ -354,16 +347,9 @@ if model_mode == 'district':
     hisp_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2.drop(["Election Set"], axis=1)*hisp_conf_W3.drop(["Election Set"], axis=1)    
     hisp_weight_df["Election Set"] = elec_sets
     neither_weight_df = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2.drop(["Election Set"], axis=1)*neither_conf_W3.drop(["Election Set"], axis=1)    
-    neither_weight_df["Election Set"] = elec_sets
+    neither_weight_df["Election Set"] = elec_sets 
 
-if model_mode == 'equal':
-    for col in black_weight_df.columns[:len(black_weight_df.columns)-1]:
-        black_weight_df[col].values[:] = 1
-    for col in hisp_weight_df.columns[:len(hisp_weight_df.columns)-1]:
-        hisp_weight_df[col].values[:] = 1
-    for col in neither_weight_df.columns[:len(neither_weight_df.columns)-1]:
-        neither_weight_df[col].values[:] = 1
-    
+
 ##############################################################################
 #accrue points for black and hispanic voters if cand-of-choice wins
 general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
