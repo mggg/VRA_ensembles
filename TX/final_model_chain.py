@@ -454,7 +454,6 @@ def final_elec_model(partition):
             
             party_general_winner = cand_race_table.loc[cand_race_table["Candidates"] == general_winner, "Party"].values[0] 
              
-            #need to compute new minority-preferred-candidate for runoff?
             #we always care who preferred candidate is in runoff if the minority preferred primary
             #candidate wins in district primary
             runoff_black_pref = "N/A" if runoff_winner == "N/A" else \
@@ -679,8 +678,7 @@ step_Num = 0
 best_score = 0
 #run chain and collect data
 for step in chain:
-    print(step_Num)
-    #for storage
+    #saving at intervals
     if step_Num % store_interval == 0 and step_Num > 0:
         store_plans.to_csv("store_plans_{}.csv".format(run_name), index= False)
         map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "County Splits", "VRA score"])
