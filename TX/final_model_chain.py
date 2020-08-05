@@ -81,7 +81,7 @@ pop_tol = .005 #U.S. Cong
 assignment1= 'CD'
 run_name = 'Test run, '#sys.argv[1]
 model_mode = 'district' #or district, statewide
-run_type = 'equal' #sys.argv[2]
+run_type = 'hill_climb' #sys.argv[2]
 min_group = 'hisp' #sys.argv[4]
 num_districts = 36
 degrandy_hisp = 11 #10.39 rounded up
@@ -147,14 +147,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 #build graph from geo_dataframe
-graph = Graph.from_geodataframe(state_gdf)
-graph.add_data(state_gdf)
-centroids = state_gdf.centroid
-c_x = centroids.x
-c_y = centroids.y
-for node in graph.nodes():
-    graph.nodes[node]["C_X"] = c_x[node]
-    graph.nodes[node]["C_Y"] = c_y[node]
+#graph = Graph.from_geodataframe(state_gdf)
+#graph.add_data(state_gdf)
+#centroids = state_gdf.centroid
+#c_x = centroids.x
+#c_y = centroids.y
+#for node in graph.nodes():
+#    graph.nodes[node]["C_X"] = c_x[node]
+#    graph.nodes[node]["C_Y"] = c_y[node]
 
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
@@ -221,7 +221,6 @@ for elec_set in elec_sets:
         for dist in range(num_districts):
             recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
    
-
 if model_mode == 'statewide' or model_mode == 'equal':   
     for elec in primary_elecs + runoff_elecs:
         for district in range(num_districts):
@@ -335,7 +334,7 @@ def final_elec_model(partition):
         black_weight_df_L = pd.DataFrame(columns = range(num_districts))
         black_weight_df_L["Election Set"]  = elec_sets
         hisp_weight_df_L = pd.DataFrame(columns = range(num_districts))
-        neither_weight_df_L["Election Set"]  = elec_sets
+        hisp_weight_df_L["Election Set"] = elec_sets
     else:
         neither_weight_df_L = neither_weight_df
         black_weight_df_L = black_weight_df
@@ -493,9 +492,9 @@ def final_elec_model(partition):
     
 ########################################################################################
     #Compute district probabilities: black, Latino, neither and overlap 
-    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum(black_points_accrued[i])/sum(black_weight_df[i]) for i in dist_list]
-    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df[i]) for i in dist_list]   
-    neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_list]   
+    black_vra_prob = [0 if sum(black_weight_df_L[i]) == 0 else sum(black_points_accrued[i])/sum(black_weight_df_L[i]) for i in dist_list]
+    hisp_vra_prob = [0 if sum(hisp_weight_df_L[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df_L[i]) for i in dist_list]   
+    neither_vra_prob = [0 if sum(neither_weight_df_L[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df_L[i]) for i in dist_list]   
     
     min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_list))]
     max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_list))]
