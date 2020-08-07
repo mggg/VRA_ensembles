@@ -80,7 +80,7 @@ total_steps = 50
 pop_tol = .005 #U.S. Cong
 assignment1= 'CD'
 run_name = 'Test run, '#sys.argv[1]
-model_mode = 'district' #or district, statewide
+model_mode = 'equal' #or district, statewide
 run_type = 'hill_climb' #sys.argv[2]
 min_group = 'hisp' #sys.argv[4]
 num_districts = 36
@@ -147,14 +147,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 #build graph from geo_dataframe
-#graph = Graph.from_geodataframe(state_gdf)
-#graph.add_data(state_gdf)
-#centroids = state_gdf.centroid
-#c_x = centroids.x
-#c_y = centroids.y
-#for node in graph.nodes():
-#    graph.nodes[node]["C_X"] = c_x[node]
-#    graph.nodes[node]["C_Y"] = c_y[node]
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
 
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
