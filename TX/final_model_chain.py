@@ -52,7 +52,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from ER_functions import f, norm_dist_params, ER_run, preferred_cand, accrue_points, compute_dist, compute_W2
+from ER_functions import f, norm_dist_params, ER_run, preferred_cand, accrue_points, compute_final_dist, compute_W2
 from ast import literal_eval
 #############################################################################################################
 #DATA PREP AND INPUTS:
@@ -74,32 +74,35 @@ SEN18_REP = 'CruzR_18G_U.S. Sen'
 C_X = "C_X"
 C_Y = "C_Y"
 
-#input and run parameters
+#run parameters
 start_time_total = time.time()
-total_steps = 50
+total_steps = 10000
 pop_tol = .005 #U.S. Cong
 assignment1= 'CD'
-run_name = 'Test run, '#sys.argv[1]
-model_mode = 'equal' #or district, statewide
-run_type = 'hill_climb' #sys.argv[2]
-min_group = 'hisp' #sys.argv[4]
+run_name = 'test' #sys.argv[1]
+run_type = 'free' #sys.argv[3] #(free, hill_climb, sim_anneal)
+min_group = 'hisp' #sys.argv[4] # (black, hisp, both)
+model_mode = 'equal' #sys.argv[2] #'district', equal, statewide
+start_map = 'enacted' #sys.argv[5] #'enacted' or random
+#additional parameters for opimization runs:
+#need if running hillclimb with bound
+bound = .1 #float(sys.argv[6]) 
+#need if simAnneal run (with cycles)
+cycle_length = 2000 #float(sys.argv[7])
+start_cool = 500 #float(sys.argv[8])
+stop_cool = 1500 #float(sys.argv[9])
+effective_thresh = .5 #float(sys.argv[10])
+
+#fixed parameters
 num_districts = 36
 degrandy_hisp = 11 #10.39 rounded up
 degrandy_black = 5 #4.69 rounded up
 cand_drop_thresh = 0
+
 plot_path = 'tx-results-cvap-adjoined/tx-results-cvap-adjoined.shp'  #for shapefile
-start_map = 'enacted' #sys.argv[9]
 store_interval = 2000 #how many steps until storage
 stuck_length = 1000 #steps at same score until break
 DIR = ''
-#additional parameters if doing opimization runs:
-    #for hill climbing
-bound = .1#float(sys.argv[5]) 
-    #need if simAnneal run (with cycles)
-cycle_length = 10#float(sys.argv[6])
-start_cool = 3#float(sys.argv[7])
-stop_cool = 7#float(sys.argv[8])
-effective_thresh = .5 #float(sys.argv[9])
 
 #read files
 elec_data = pd.read_csv("TX_elections.csv")
@@ -399,19 +402,19 @@ def final_elec_model(partition):
                                   
     #################################################################################  
     #district probability distribution: state
-    final_state_prob_dict = compute_dist(map_winners, black_pref_cands_state, black_pref_cands_runoffs_state,\
+    final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_state, black_pref_cands_runoffs_state,\
                  hisp_pref_cands_state, hisp_pref_cands_runoffs_state, neither_weight_state, \
                  black_weight_state, hisp_weight_state, dist_elec_results, dist_list,
                  cand_race_table, num_districts, candidates, elec_sets, elec_set_dict)
     
     #district probability distribution: equal
-    final_equal_prob_dict = compute_dist(map_winners, black_pref_cands_state, black_pref_cands_runoffs_state,\
+    final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_state, black_pref_cands_runoffs_state,\
              hisp_pref_cands_state, hisp_pref_cands_runoffs_state, neither_weight_equal, \
              black_weight_equal, hisp_weight_equal, dist_elec_results, dist_list,
              cand_race_table, num_districts, candidates, elec_sets, elec_set_dict)
     
     #district probability distribution: district
-    final_dist_prob_dict = compute_dist(map_winners, black_pref_cands_dist, black_pref_cands_runoffs_dist,\
+    final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_dist, black_pref_cands_runoffs_dist,\
              hisp_pref_cands_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
              black_weight_dist, hisp_weight_dist, dist_elec_results, dist_list,
              cand_race_table, num_districts, candidates, elec_sets, elec_set_dict)
@@ -710,9 +713,8 @@ for step in chain:
 
      #store plans
     if step["vra_score"] > best_score:
-        store_plans["Best Map"] = store_plans["Index"].map(dict(step.assignment))
+        store_plans["Best Map {}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
         best_score = step["vra_score"]
-        #store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
     if step["vra_score"] == temp_score:
         stuck_step += 1
     else:
@@ -725,7 +727,7 @@ for step in chain:
     step_Num += 1
 
 #output data
-store_plans.to_csv("store_plans_{}.csv".format(run_name), index= False)
+store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
 
 #store map-wide data
 map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "County Splits", "VRA score"])
@@ -735,22 +737,22 @@ map_metric_df["Num Black Dists"] = num_black_dists
 map_metric_df["VRA score"] = vra_score
 map_metric_df["Cut edges"] = cut_edges
 map_metric_df["Map Num"] = list(range(total_steps))
-map_metric_df.to_csv("map_metric_df_{}.csv".format(run_name), index = False)
+map_metric_df.to_csv(DIR + "outputs/map_metric_df_{}.csv".format(run_name), index = False)
 
 #store district-by-district data
 #demo data
-hisp_prop_df.to_csv("hisp_prop_df_{}.csv".format(run_name), index= False)
-black_prop_df.to_csv("black_prop_df_{}.csv".format(run_name), index= False)
-white_prop_df.to_csv("white_prop_df_{}.csv".format(run_name), index= False)
+hisp_prop_df.to_csv(DIR + "outputs/hisp_prop_df_{}.csv".format(run_name), index= False)
+black_prop_df.to_csv(DIR + "outputs/black_prop_df_{}.csv".format(run_name), index= False)
+white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), index= False)
 #partisan data
-pres16_df.to_csv("pres16_df_{}.csv".format(run_name), index = False)
-pres12_df.to_csv("pres12_df_{}.csv".format(run_name), index = False)
-sen18_df.to_csv("sen18_df_{}.csv".format(run_name), index = False)
+pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), index = False)
+pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), index = False)
+sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), index = False)
 centroids_df.to_csv(DIR + "centroids_df_{}.csv".format(run_name), index = False)
 #vra data
-final_state_prob_df.to_csv(DIR + "final_state_prob_df_{}.csv".format(run_name), index= False)
-final_equal_prob_df.to_csv(DIR + "final_equal_prob_df_{}.csv".format(run_name), index= False)
-final_dist_prob_df.to_csv(DIR + "final_dist_prob_df_{}.csv".format(run_name), index= False)
+final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
+final_equal_prob_df.to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), index= False)
+final_dist_prob_df.to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), index= False)
 ############# final print outs
 print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
 print("total moves", count_moves)

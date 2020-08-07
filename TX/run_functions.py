@@ -128,7 +128,7 @@ def accrue_points(primary_winner, min_pref_cand, party_general_winner, min_pref_
             & (runoff_winner == runoff_min_pref) & (party_general_winner == 'D'))       
         return accrue
 
-def compute_dist(map_winners, black_pref_cands_df, black_pref_cands_runoffs,\
+def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoffs,\
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
                  black_weight_df, hisp_weight_df, dist_elec_results, dist_list,
                  cand_race_table, num_districts, candidates, \
