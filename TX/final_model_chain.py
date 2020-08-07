@@ -52,7 +52,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from ER_functions import f, norm_dist_params, ER_run, preferred_cand, accrue_points, compute_final_dist, compute_W2
+from run_functions import f, norm_dist_params, ER_run, preferred_cand, accrue_points, compute_final_dist, compute_W2
 from ast import literal_eval
 #############################################################################################################
 #DATA PREP AND INPUTS:
@@ -592,14 +592,6 @@ store_plans["Index"] = list(initial_partition.assignment.keys())
 state_gdf_geoid = state_gdf[[geo_id]]
 store_plans["GEOID"] = [state_gdf_geoid.iloc[i][0] for i in store_plans["Index"]]
 
-#prep map-wide metric storage
-county_splits = []
-num_hisp_dists = []
-num_black_dists = []
-vra_score = []
-cut_edges = []
-map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "County Splits", "VRA score"])
-
 #prep district-by-district storage (each metric in its own df)
 final_state_prob_df = pd.DataFrame(columns = range(num_districts))
 final_equal_prob_df = pd.DataFrame(columns = range(num_districts))
@@ -626,13 +618,6 @@ for step in chain:
     #saving at intervals
     if step_Num % store_interval == 0 and step_Num > 0:
         store_plans.to_csv("store_plans_{}.csv".format(run_name), index= False)
-        map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "County Splits", "VRA score"])
-        map_metric_df["County Splits"] = county_splits
-        map_metric_df["Num Hisp Dists"] = num_hisp_dists
-        map_metric_df["Num Black Dists"] = num_black_dists
-        map_metric_df["VRA score"] = vra_score
-        map_metric_df["Cut edges"] = cut_edges
-        map_metric_df.to_csv("map_metric_df_{}.csv".format(run_name), index = False)
     if step.parent is not None:
         if step.assignment != step.parent.assignment:
             count_moves += 1
@@ -703,16 +688,9 @@ for step in chain:
         final_dist_prob_df.loc[len(final_dist_prob_df)] = final_dist_prob_df.loc[len(final_dist_prob_df) -1]
         for i in final_dist_prob_dict.keys():
             final_dist_prob_df.at[len(final_dist_prob_df)-1, i] = final_dist_prob_dict[i]
-   
-    #map-wide storage    
-    county_splits.append(step["num_splits"])
-    num_hisp_dists.append(total_hisp_final)
-    num_black_dists.append(total_black_final)
-    vra_score.append(step["vra_score"])
-    cut_edges.append(step["num_cut_edges"])
 
-     #store plans
-    if step["vra_score"] > best_score:
+     #store plans        
+    if step["vra_score"] > best_score and run_type != 'free':
         store_plans["Best Map {}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
         best_score = step["vra_score"]
     if step["vra_score"] == temp_score:
@@ -728,16 +706,6 @@ for step in chain:
 
 #output data
 store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
-
-#store map-wide data
-map_metric_df = pd.DataFrame(columns = ["Num Hisp Dists", "Num Black Dists", "County Splits", "VRA score"])
-map_metric_df["County Splits"] = county_splits
-map_metric_df["Num Hisp Dists"] = num_hisp_dists
-map_metric_df["Num Black Dists"] = num_black_dists
-map_metric_df["VRA score"] = vra_score
-map_metric_df["Cut edges"] = cut_edges
-map_metric_df["Map Num"] = list(range(total_steps))
-map_metric_df.to_csv(DIR + "outputs/map_metric_df_{}.csv".format(run_name), index = False)
 
 #store district-by-district data
 #demo data
