@@ -151,7 +151,10 @@ for elec in elections: #only elections we care about
         state_df["{}%CVAP".format(cand)] = state_df["{}".format(cand)]/state_df[cvap_columns[elec_year]['CVAP']]    
         state_df["{}%CVAP".format(cand)] = [min(x,1) for x in list(state_df["{}%CVAP".format(cand)])]
     candidates[elec] = dict(zip(list(range(len(cands))), cands))
-            
+
+cand_race_dict = cand_race_table.set_index("Candidates").to_dict()["Race"]
+min_cand_weights_dict = {key:min_cand_weights.to_dict()[key][0] for key in  min_cand_weights.to_dict().keys()}     
+
 state_df.to_csv(DIR + "outputs/state_df.csv")
 
 my_updaters = {

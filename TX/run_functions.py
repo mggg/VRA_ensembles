@@ -31,11 +31,12 @@ import time
 import heapq
 import operator
 
-def f(x, dist_list):
+DIR = ''
+def f(x, params):
     product = 1
-    for i in dist_list.keys():
-        mean = dist_list[i][0]
-        std = dist_list[i][1]
+    for i in params.keys():
+        mean = params[i][0]
+        std = params[i][1]
         dist_from_mean = abs(x-mean)
         ro = scipy.stats.norm.cdf(mean+dist_from_mean, mean, std) - scipy.stats.norm.cdf(mean-dist_from_mean, mean, std)
         product = product*ro
@@ -50,13 +51,13 @@ def norm_dist_params(y, y_pred, sum_params, pop_weights): #y_predict is vector o
     return mean, std #CHECK- std not var right?
 
 def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
-           share_norm_params_dict, display_dist = 1, display_elec = 1,race = 1):
+           share_norm_params_dict, display_dist = 1, display_elec = 1,race = 1, verbose_bool = False):
     group_share_add = sm.add_constant(group_share)
     model = sm.WLS(cand_cvap_share, group_share_add, weights = pop_weights)            
     model = model.fit()
     cand_cvap_share_pred = model.predict()
     mean, std = norm_dist_params(cand_cvap_share, cand_cvap_share_pred, sum(model.params), pop_weights)
-    if district == display_dist and elec == display_elec:
+    if district == display_dist and elec == display_elec and verbose_bool:
         plt.figure(figsize=(12, 6))
         plt.scatter(group_share, cand_cvap_share, c = pop_weights, cmap = 'viridis_r')  
             # scatter plot showing actual data
@@ -66,11 +67,11 @@ def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
         plt.xlabel("{} share of Precinct CVAP".format(race))
         plt.ylabel("{}'s share of precinct CVAP".format(cand))
         plt.title("ER, {} support for {}, district {}".format(race, cand, district+1))
-      #  plt.savefig("{} {} support_{}.png".format(race, cand, district+1))
+        plt.savefig(DIR + "outputs/{}_{}_support_{}_{}.png".format(race, cand, district+1, elec))
     
     return mean, std
 
-def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1, race = 1):
+def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1, race = 1, verbose_bool = False):
     if len(cand_norm_params) == 1:
             pref_cand = list(cand_norm_params.keys())[0]
             pref_confidence = 1
@@ -83,9 +84,10 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
         dist2 = cand_norm_params_copy[dist2_index]        
         pref_cand = dist1_index        
 
-        if [0.0,0.0] in list(cand_norm_params.values()):
-            blank_index = [k for k,v in cand_norm_params.items() if v == [0.0,0.0]][0]
-            del cand_norm_params[blank_index]
+        
+        del_indices = [k for k,v in cand_norm_params.items() if cand_norm_params[k] == [0.0,0.0]]
+        for z in del_indices:
+            cand_norm_params.pop(z, None)
             
         res = scipy.optimize.minimize(lambda x, cand_norm_params: -f(x, cand_norm_params), \
                                       (dist1[0]- dist2[0])/2+ dist2[0] , args=(cand_norm_params), \
@@ -93,7 +95,7 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
         pref_confidence = abs(res.fun)[0]
         
         
-        if district == display_dist and elec == display_elec:
+        if district == display_dist and elec == display_elec and verbose_bool:
             print("elec", elec)
             print("race", race)
             print("params", cand_norm_params)
@@ -116,21 +118,14 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
                 section = np.arange(mean-dist_from_mean, mean+dist_from_mean, .01)
                 plt.fill_between(section,iq.pdf(section)) 
             plt.title("Candidate Distributions {}, {}, {}".format(elec, district, race))
+            plt.savefig(DIR + "outputs/{}_{}_cand_dists_{}.png".format(race, district+1, elec))
         
         return pref_cand, pref_confidence
 
-def accrue_points(primary_winner, min_pref_cand, party_general_winner, min_pref_prim_rank, \
-                  runoff_winner, runoff_min_pref, candidates, runoff_race):
-        if runoff_race == None:
-            accrue = ((primary_winner == min_pref_cand) & (party_general_winner == 'D')) 
-        else:
-            accrue = ((min_pref_prim_rank < 3) \
-            & (runoff_winner == runoff_min_pref) & (party_general_winner == 'D'))       
-        return accrue
 
 def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoffs,\
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
-                 black_weight_df, hisp_weight_df, dist_elec_results, dist_list,
+                 black_weight_df, hisp_weight_df, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict):
     #determine if election set accrues points by district for black and Latino voters
@@ -146,46 +141,68 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     primary_second_df = pd.DataFrame(columns = range(num_districts))
     primary_second_df["Election Set"] = elec_sets
     
-    for i in dist_list:
-        for elec_set in elec_sets:
-            black_pref_cand = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, i].values[0]
-            hisp_pref_cand = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, i].values[0]       
-            
-            primary_race = elec_set_dict[elec_set]["Primary"]
-            runoff_race = None if 'Runoff' not in elec_set_dict[elec_set].keys() else elec_set_dict[elec_set]["Runoff"]
-            
-            primary_winner = primary_winners.loc[primary_winners["Election Set"] == elec_set, i].values[0]
-            general_winner = general_winners.loc[general_winners["Election Set"] == elec_set, i].values[0]
-            runoff_winner = "N/A" if elec_set not in list(runoff_winners["Election Set"]) \
-            else runoff_winners.loc[runoff_winners["Election Set"] == elec_set, i].values[0]
-            
-            primary_race_shares = dist_elec_results[primary_race][i]
-            primary_ranking = {key: rank for rank, key in enumerate(sorted(primary_race_shares, key=primary_race_shares.get, reverse=True), 1)}        
-            second_place_primary = [cand for cand, value in primary_ranking.items() if primary_ranking[cand] == 2]
-            primary_second_df.at[primary_second_df["Election Set"] == elec_set, i] = second_place_primary[0]
-            
-            black_pref_prim_rank = primary_ranking[black_pref_cand]
-            hisp_pref_prim_rank = primary_ranking[hisp_pref_cand]
-            
-            party_general_winner = cand_race_table.loc[cand_race_table["Candidates"] == general_winner, "Party"].values[0] 
-             
-            #we always care who preferred candidate is in runoff if the minority preferred primary
-            #candidate wins in district primary
-            runoff_black_pref = "N/A" if runoff_winner == "N/A" else \
-                        black_pref_cands_runoffs.loc[black_pref_cands_runoffs["Election Set"] == elec_set, i].values[0]
-            
-            runoff_hisp_pref = "N/A" if runoff_winner == 'N/A' else \
-                        hisp_pref_cands_runoffs.loc[hisp_pref_cands_runoffs["Election Set"] == elec_set, i].values[0]
-                             
-            #winning conditions (conditions to accrue points for election set/minority group):
-            black_accrue = accrue_points(primary_winner, black_pref_cand, party_general_winner, black_pref_prim_rank, \
-                      runoff_winner, runoff_black_pref, candidates, runoff_race)
-            black_pref_wins.at[black_pref_wins["Election Set"] == elec_set, i] = black_accrue 
-            
-            hisp_accrue = accrue_points(primary_winner, hisp_pref_cand, party_general_winner, hisp_pref_prim_rank, 
-                      runoff_winner, runoff_hisp_pref, candidates, runoff_race)
-            hisp_pref_wins.at[hisp_pref_wins["Election Set"] == elec_set, i] = hisp_accrue 
-            
+    primary_races = [elec_set_dict[elec_set]["Primary"] for elec_set in elec_sets]
+    runoff_races = [None if 'Runoff' not in elec_set_dict[elec_set].keys() else elec_set_dict[elec_set]["Runoff"] for elec_set in elec_sets]
+    cand_party_dict = cand_race_table.set_index("Candidates").to_dict()["Party"]
+
+    
+    for dist in dist_changes:
+        black_pref_cands = list(black_pref_cands_df[dist])
+        hisp_pref_cands = list(hisp_pref_cands_df[dist])
+        
+        primary_dict = primary_winners.set_index("Election Set").to_dict()[dist]
+        general_dict = general_winners.set_index("Election Set").to_dict()[dist]
+        runoffs_dict = runoff_winners.set_index("Election Set").to_dict()[dist]
+        primary_winner_list = [primary_dict[es] for es in elec_sets]
+        general_winner_list = [general_dict[es] for es in elec_sets]
+        runoff_winner_list = ["N/A" if es not in list(runoff_winners["Election Set"]) \
+        else runoffs_dict[es] for es in elec_sets]
+        
+        primary_race_share_dict = {primary_race:dist_elec_results[primary_race][dist] for primary_race in primary_races}
+        primary_ranking = {primary_race:{key: rank for rank, key in \
+                           enumerate(sorted(primary_race_share_dict[primary_race], \
+                           key=primary_race_share_dict[primary_race].get, reverse=True), 1)} \
+                                            for primary_race in primary_race_share_dict.keys()} 
+
+        second_place_primary = {primary_race: [cand for cand, value in primary_ranking[primary_race].items() \
+                                               if primary_ranking[primary_race][cand] == 2] for primary_race in primary_races}
+
+        primary_second_df[dist] = [second_place_primary[key][0] for key in second_place_primary.keys()]
+        
+        black_pref_prim_rank = [primary_ranking[pr][bpc] for pr, bpc in zip(primary_races, black_pref_cands)]
+        hisp_pref_prim_rank = [primary_ranking[pr][hpc] for pr, hpc in zip(primary_races, hisp_pref_cands)]
+        
+        party_general_winner = [cand_party_dict[gw] for gw in general_winner_list]
+        
+        #we always care who preferred candidate is in runoff if the minority preferred primary
+        #candidate wins in district primary
+        runoff_black_pref = ["N/A" if rw == "N/A" else \
+                     bpc for rw,bpc in zip(runoff_winner_list, list(black_pref_cands_runoffs[dist]))]
+
+        runoff_hisp_pref = ["N/A" if rw == "N/A" else \
+                     hpc for rw,hpc in zip(runoff_winner_list, list(hisp_pref_cands_runoffs[dist]))]               
+        #winning conditions (conditions to accrue points for election set/minority group):
+
+        black_accrue = [(prim_win == bpc and party_win == 'D') if run_race == None else \
+                        ((bpp_rank < 3 and run_win == runbp and party_win == 'D') or \
+                        (primary_race_share_dict[prim_race][bpc] > .5 and party_win == 'D')) \
+                        for run_race, prim_win, bpc, party_win, bpp_rank, run_win, runbp, prim_race \
+                        in zip(runoff_races, primary_winner_list,black_pref_cands, \
+                        party_general_winner, black_pref_prim_rank,runoff_winner_list, \
+                        runoff_black_pref, primary_races)]
+        
+        black_pref_wins[dist] = black_accrue
+
+        hisp_accrue = [(prim_win == hpc and party_win == 'D') if run_race == None else \
+                       ((hpp_rank < 3 and run_win == runhp and party_win == 'D') or \
+                       (primary_race_share_dict[prim_race][hpc] > .5 and party_win == 'D'))\
+                       for run_race, prim_win, hpc, party_win, hpp_rank, run_win, runhp, \
+                       prim_race in zip(runoff_races, primary_winner_list,hisp_pref_cands, \
+                       party_general_winner, hisp_pref_prim_rank,runoff_winner_list, \
+                       runoff_hisp_pref, primary_races)]
+                       
+        hisp_pref_wins[dist] = hisp_accrue
+        
         
     neither_pref_wins = (1-black_pref_wins.drop(['Election Set'], axis = 1))*(1-hisp_pref_wins.drop(['Election Set'], axis = 1))
     neither_pref_wins["Election Set"] = elec_sets
@@ -199,24 +216,24 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     
 ########################################################################################
     #Compute district probabilities: black, Latino, neither and overlap 
-    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum(black_points_accrued[i])/sum(black_weight_df[i]) for i in dist_list]
-    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df[i]) for i in dist_list]   
-    neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_list]   
+    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum(black_points_accrued[i])/sum(black_weight_df[i]) for i in dist_changes]
+    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df[i]) for i in dist_changes]   
+    neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_changes]   
     
-    min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_list))]
-    max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_list))]
+    min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_changes))]
+    max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
     
     #uses ven diagram overlap/neither method
-    final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_list))]
-    final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_list))]
-    final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_list))]
-    final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_list))]
+    final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_changes))]
+    final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_changes))]
+    final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+    final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
         
-    return  dict(zip(dist_list, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
+    return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
     
  
-def compute_W2(elec_sets, districts, min_cand_weights, black_pref_cands_df, hisp_pref_cands_df, \
-               cand_race_table):
+def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df, hisp_pref_cands_df, \
+               cand_race_dict):
     min_cand_black_W2 = pd.DataFrame(columns = districts)
     min_cand_black_W2["Election Set"] = elec_sets
     min_cand_hisp_W2 = pd.DataFrame(columns = districts)
@@ -224,22 +241,24 @@ def compute_W2(elec_sets, districts, min_cand_weights, black_pref_cands_df, hisp
     min_cand_neither_W2 = pd.DataFrame(columns = districts)
     min_cand_neither_W2["Election Set"] = elec_sets
 
-    for elec_set in elec_sets:
-        for dist in districts:             
-            black_pref = black_pref_cands_df.loc[black_pref_cands_df["Election Set"] == elec_set, dist].values[0]
-            black_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == black_pref, "Race"].values[0]
-            black_pref_black = True if 'Black' in black_pref_race else False        
-            black_cand_weight_type = 'Relevant Minority' if black_pref_black else 'Other'
-            min_cand_black_W2.at[min_cand_black_W2["Election Set"] == elec_set, dist] = min_cand_weights[black_cand_weight_type][0] 
-            
-            hisp_pref = hisp_pref_cands_df.loc[hisp_pref_cands_df["Election Set"] == elec_set, dist].values[0]
-            hisp_pref_race = cand_race_table.loc[cand_race_table["Candidates"] == hisp_pref, "Race"].values[0]
-            hisp_pref_hisp = True if 'Hispanic' in hisp_pref_race else False             
-            hisp_cand_weight_type = 'Relevant Minority' if hisp_pref_hisp else 'Other'
-            min_cand_hisp_W2.at[min_cand_hisp_W2["Election Set"] == elec_set, dist] = min_cand_weights[hisp_cand_weight_type][0] 
-            
-            neither_cand_weight_type = 'Relevant Minority' if (hisp_pref_hisp & black_pref_black) else\
-                    'Other' if (not hisp_pref_hisp and not black_pref_black) else 'Partial '
-            min_cand_neither_W2.at[min_cand_neither_W2["Election Set"] == elec_set, dist] = min_cand_weights[neither_cand_weight_type][0] 
-      
+    for dist in districts:
+        black_pref = list(black_pref_cands_df[dist])
+
+        black_pref_race = [cand_race_dict[bp] for bp in black_pref]
+        black_cand_weight = [min_cand_weights_dict["Relevant Minority"] if "Black" in bpr else \
+                             min_cand_weights_dict["Other"] for bpr in black_pref_race]
+        min_cand_black_W2[dist] = black_cand_weight
+        
+        hisp_pref = list(hisp_pref_cands_df[dist])
+        hisp_pref_race = [cand_race_dict[hp] for hp in hisp_pref]
+        hisp_cand_weight = [min_cand_weights_dict["Relevant Minority"] if "Hispanic" in hpr else \
+                             min_cand_weights_dict["Other"] for hpr in hisp_pref_race]
+        min_cand_hisp_W2[dist] = hisp_cand_weight
+    
+         
+        neither_cand_weight = [min_cand_weights_dict['Relevant Minority'] if ('Hispanic' in hpr and 'Black' in bpr) else\
+        min_cand_weights_dict['Other'] if ('Hispanic' not in hpr and 'Black' not in bpr) else \
+           min_cand_weights_dict['Partial '] for bpr,hpr in zip(black_pref_race, hisp_pref_race)]
+        min_cand_neither_W2[dist] = neither_cand_weight
+        
     return min_cand_black_W2, min_cand_hisp_W2, min_cand_neither_W2
