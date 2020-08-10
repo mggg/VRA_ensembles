@@ -151,14 +151,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-#graph = Graph.from_geodataframe(state_gdf)
-#graph.add_data(state_gdf)
-#centroids = state_gdf.centroid
-#c_x = centroids.x
-#c_y = centroids.y
-#for node in graph.nodes():
-#    graph.nodes[node]["C_X"] = c_x[node]
-#    graph.nodes[node]["C_Y"] = c_y[node]
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
 #
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
@@ -213,10 +213,15 @@ hisp_pref_cands_runoffs_state = pd.DataFrame(columns = range(num_districts))
 hisp_pref_cands_runoffs_state["Election Set"] = elec_sets 
 recency_W1 = pd.DataFrame(columns = range(num_districts))
 recency_W1["Election Set"] = elec_sets
-black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-black_conf_W3_state["Election Set"] = elec_sets
-hisp_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-hisp_conf_W3_state["Election Set"] = elec_sets  
+black_conf_W3_prim_state = pd.DataFrame(columns = range(num_districts))
+black_conf_W3_prim_state["Election Set"] = elec_sets
+hisp_conf_W3_prim_state = pd.DataFrame(columns = range(num_districts))
+hisp_conf_W3_prim_state["Election Set"] = elec_sets 
+
+black_conf_W3_runoffs_state = pd.DataFrame(columns = range(num_districts))
+black_conf_W3_runoffs_state["Election Set"] = elec_sets
+hisp_conf_W3_runoffs_state = pd.DataFrame(columns = range(num_districts))
+hisp_conf_W3_runoffs_state["Election Set"] = elec_sets 
 
 #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
 for elec_set in elec_sets:
@@ -234,17 +239,23 @@ for elec in primary_elecs + runoff_elecs:
             hisp_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Confidence"].values[0]               
             
             black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
+            black_conf_W3_prim_state.at[black_conf_W3_prim_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
             hisp_pref_cands_prim_state.at[hisp_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
+            hisp_conf_W3_prim_state.at[hisp_conf_W3_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
         else:
             black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
             hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
+            black_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Confidence"].values[0]
+            hisp_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Confidence"].values[0]               
+                        
             black_pref_cands_runoffs_state.at[black_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+            black_conf_W3_runoffs_state.at[black_conf_W3_runoffs_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
             hisp_pref_cands_runoffs_state.at[hisp_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+            hisp_conf_W3_runoffs_state.at[hisp_conf_W3_runoffs_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf 
 
 #neither computation is based on results of black and latino computations
-neither_conf_W3_state = black_conf_W3_state.drop(["Election Set"], axis =1)*hisp_conf_W3_state.drop(["Election Set"], axis =1)
+            #FIX WEIGHTS
+neither_conf_W3_state = black_conf_W3_prim_state.drop(["Election Set"], axis = 1)*hisp_conf_W3_prim_state.drop(["Election Set"], axis =1)
 neither_conf_W3_state["Election Set"] = elec_sets
    
 min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = compute_W2(elec_sets, \
@@ -252,9 +263,9 @@ min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = com
 
 #compute final election weights by taking product of weights 1,2, and 3 for each election set and district
 #Note: because these are statewide weights, and election set will have the same weight across districts
-black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
+black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_prim_state.drop(["Election Set"], axis=1)
 black_weight_state["Election Set"] = elec_sets
-hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_state.drop(["Election Set"], axis=1)*hisp_conf_W3_state.drop(["Election Set"], axis=1)    
+hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_state.drop(["Election Set"], axis=1)*hisp_conf_W3_prim_state.drop(["Election Set"], axis=1)    
 hisp_weight_state["Election Set"] = elec_sets
 neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
 neither_weight_state["Election Set"] = elec_sets
@@ -320,10 +331,7 @@ def final_elec_model(partition):
     map_winners["Election Type"] = elec_data_trunc["Type"]
     for i in dist_changes:
         map_winners[i] = [max(dist_elec_results[elec][i].items(), key=operator.itemgetter(1))[0] for elec in elections]
-#        for elec in elections:
-#            results_dict = dist_elec_results[elec][i]
-#            map_winners.at[map_winners["Election"] == elec, i] = max(results_dict, key = results_dict.get) 
-#    
+
     black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
     black_pref_cands_prim_dist["Election Set"] = elec_sets
     hisp_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
@@ -398,7 +406,13 @@ def final_elec_model(partition):
     #combine for final black and Latino election weights (now district-dependent)
     neither_conf_W3_dist = black_conf_W3_dist.drop(["Election Set"], axis =1)*hisp_conf_W3_dist.drop(["Election Set"], axis =1)
     neither_conf_W3_dist["Election Set"] = elec_sets
+    
     black_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_dist.drop(["Election Set"], axis=1)*black_conf_W3_dist.drop(["Election Set"], axis=1)
+    if step_Num == 8:
+        print(recency_W1)
+        print(min_cand_black_W2_dist)
+        print(black_conf_W3_dist)
+        print(black_weight_dist)
     black_weight_dist["Election Set"] = elec_sets
     hisp_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_dist.drop(["Election Set"], axis=1)*hisp_conf_W3_dist.drop(["Election Set"], axis=1)    
     hisp_weight_dist["Election Set"] = elec_sets
@@ -669,22 +683,22 @@ for step in chain:
             white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
             white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
             
-            last_state_prob_dict = dict(zip(final_state_prob_df.columns, final_state_prob_df.loc[(step_Num % store_interval) - 1]))
+            last_state_prob_dict = dict(zip(final_state_prob_df.columns, final_state_prob_df.loc[(step_Num - 1) % store_interval]))
             final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
             final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
             final_state_prob_df.loc[-1] = list(last_state_prob_dict.values())
             
-            last_equal_prob_dict = dict(zip(final_equal_prob_df.columns, final_equal_prob_df.loc[(step_Num % store_interval) - 1]))
+            last_equal_prob_dict = dict(zip(final_equal_prob_df.columns, final_equal_prob_df.loc[(step_Num -1) % store_interval]))
             final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
             final_equal_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
             final_equal_prob_df.loc[-1] = list(last_equal_prob_dict.values())
             
-            last_dist_prob_dict = dict(zip(final_dist_prob_df.columns, final_dist_prob_df.loc[(step_Num % store_interval) - 1]))
+            last_dist_prob_dict = dict(zip(final_dist_prob_df.columns, final_dist_prob_df.loc[(step_Num - 1) % store_interval]))
             final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
             final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
             final_dist_prob_df.loc[-1] = list(last_dist_prob_dict.values())
             
-            
+
     if step.parent is not None:
         if step.assignment != step.parent.assignment:
             count_moves += 1
