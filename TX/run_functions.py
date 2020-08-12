@@ -26,7 +26,6 @@ import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import scipy
 from scipy import stats
-import intervals as I
 import time
 import heapq
 import operator
