@@ -151,14 +151,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-#graph = Graph.from_geodataframe(state_gdf)
-#graph.add_data(state_gdf)
-#centroids = state_gdf.centroid
-#c_x = centroids.x
-#c_y = centroids.y
-#for node in graph.nodes():
-#    graph.nodes[node]["C_X"] = c_x[node]
-#    graph.nodes[node]["C_Y"] = c_y[node]
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
 
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
@@ -264,6 +264,7 @@ hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_s
 hisp_weight_state["Election Set"] = elec_sets
 neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
 neither_weight_state["Election Set"] = elec_sets
+
 
 black_weight_equal = pd.DataFrame(columns = range(num_districts))
 black_weight_equal[0] = [1]*len(elec_sets)

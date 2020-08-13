@@ -70,7 +70,8 @@ def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
     
     return mean, std
 
-def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1, race = 1, verbose_bool = False):
+def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1,
+                 race = 1, verbose_bool = False):
     if len(cand_norm_params) == 1:
             pref_cand = list(cand_norm_params.keys())[0]
             pref_confidence = 1
