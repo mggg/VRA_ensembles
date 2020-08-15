@@ -57,6 +57,7 @@ def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
     cand_cvap_share_pred = model.predict()
     mean, std = norm_dist_params(cand_cvap_share, cand_cvap_share_pred, sum(model.params), pop_weights)
     if district == display_dist and elec == display_elec and verbose_bool:
+        print("num precincts in dist:", len(group_share))
         plt.figure(figsize=(12, 6))
         plt.scatter(group_share, cand_cvap_share, c = pop_weights, cmap = 'viridis_r')  
             # scatter plot showing actual data
@@ -127,7 +128,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
                  black_weight_df, hisp_weight_df, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
-                 elec_sets, elec_set_dict):
+                 elec_sets, elec_set_dict, single_map = False):
     #determine if election set accrues points by district for black and Latino voters
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
@@ -229,7 +230,9 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
         
-    return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
+    return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
+            black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
+            neither_points_accrued, primary_second_df
     
  
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df, hisp_pref_cands_df, \

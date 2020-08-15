@@ -76,10 +76,10 @@ C_Y = "C_Y"
 
 #run parameters
 start_time_total = time.time()
-total_steps = 1
-pop_tol = .05 #U.S. Cong
-assignment1= 'sldu172' #CD sldl358, sldu172
-run_name = 'sldu172' #sys.argv[1]
+total_steps = 0
+pop_tol = .005 #U.S. Cong
+assignment1= 'CD' #CD, sldl358, sldu172, sldl309
+run_name = 'sldl358' #sys.argv[1]
 run_type = 'free' #sys.argv[3] #(free, hill_climb, sim_anneal)
 min_group = 'hisp' #sys.argv[4] # (black, hisp, both)
 model_mode = 'equal' #sys.argv[2] #'district', equal, statewide
@@ -94,7 +94,7 @@ stop_cool = 1500 #float(sys.argv[9])
 effective_thresh = .5 #float(sys.argv[10])
 
 #fixed parameters
-num_districts = 31 #150 state house, 31 senate, 36 Cong
+num_districts = 36 #150 state house, 31 senate, 36 Cong
 degrandy_hisp = 11 #10.39 rounded up
 degrandy_black = 5 #4.69 rounded up
 cand_drop_thresh = 0
@@ -132,9 +132,14 @@ for elec_set in elec_sets:
 elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Election Set"]))
 
 #initialize state_gdf
+#reformat/re-index enacted map plans
 state_gdf = gpd.read_file(plot_path)
 state_gdf["CD"] = state_gdf["CD"].astype('int')
+state_gdf["sldu172"] = state_gdf["sldu172"] - 1
+state_gdf["sldl358"] = state_gdf["sldl358"] - 1
+state_gdf["sldl309"] = state_gdf["sldl309"] - 1
 state_gdf.columns = state_gdf.columns.str.replace("-", "_")
+
 
 #replace cut-off candidate names from shapefile with full names
 election_return_cols = list(election_returns.columns)
@@ -151,14 +156,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-graph = Graph.from_geodataframe(state_gdf)
-graph.add_data(state_gdf)
-centroids = state_gdf.centroid
-c_x = centroids.x
-c_y = centroids.y
-for node in graph.nodes():
-    graph.nodes[node]["C_X"] = c_x[node]
-    graph.nodes[node]["C_Y"] = c_y[node]
+#graph = Graph.from_geodataframe(state_gdf)
+#graph.add_data(state_gdf)
+#centroids = state_gdf.centroid
+#c_x = centroids.x
+#c_y = centroids.y
+#for node in graph.nodes():
+#    graph.nodes[node]["C_X"] = c_x[node]
+#    graph.nodes[node]["C_Y"] = c_y[node]
 
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
@@ -213,15 +218,10 @@ hisp_pref_cands_runoffs_state = pd.DataFrame(columns = range(num_districts))
 hisp_pref_cands_runoffs_state["Election Set"] = elec_sets 
 recency_W1 = pd.DataFrame(columns = range(num_districts))
 recency_W1["Election Set"] = elec_sets
-black_conf_W3_prim_state = pd.DataFrame(columns = range(num_districts))
-black_conf_W3_prim_state["Election Set"] = elec_sets
-hisp_conf_W3_prim_state = pd.DataFrame(columns = range(num_districts))
-hisp_conf_W3_prim_state["Election Set"] = elec_sets 
-
-black_conf_W3_runoffs_state = pd.DataFrame(columns = range(num_districts))
-black_conf_W3_runoffs_state["Election Set"] = elec_sets
-hisp_conf_W3_runoffs_state = pd.DataFrame(columns = range(num_districts))
-hisp_conf_W3_runoffs_state["Election Set"] = elec_sets 
+black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
+black_conf_W3_state["Election Set"] = elec_sets
+hisp_conf_W3_state = pd.DataFrame(columns = range(num_districts))
+hisp_conf_W3_state["Election Set"] = elec_sets 
 
 #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
 for elec_set in elec_sets:
@@ -239,9 +239,9 @@ for elec in primary_elecs + runoff_elecs:
             hisp_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Confidence"].values[0]               
             
             black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3_prim_state.at[black_conf_W3_prim_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
+            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
             hisp_pref_cands_prim_state.at[hisp_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            hisp_conf_W3_prim_state.at[hisp_conf_W3_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
+            hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
         else:
             black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
             hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
@@ -250,7 +250,7 @@ for elec in primary_elecs + runoff_elecs:
             hisp_pref_cands_runoffs_state.at[hisp_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
            
 #neither computation is based on results of black and latino computations
-neither_conf_W3_state = black_conf_W3_prim_state.drop(["Election Set"], axis = 1)*hisp_conf_W3_prim_state.drop(["Election Set"], axis =1)
+neither_conf_W3_state = black_conf_W3_state.drop(["Election Set"], axis = 1)*hisp_conf_W3_state.drop(["Election Set"], axis =1)
 neither_conf_W3_state["Election Set"] = elec_sets
    
 min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = compute_W2(elec_sets, \
@@ -258,9 +258,9 @@ min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = com
 
 #compute final election weights by taking product of weights 1,2, and 3 for each election set and district
 #Note: because these are statewide weights, and election set will have the same weight across districts
-black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_prim_state.drop(["Election Set"], axis=1)
+black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
 black_weight_state["Election Set"] = elec_sets
-hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_state.drop(["Election Set"], axis=1)*hisp_conf_W3_prim_state.drop(["Election Set"], axis=1)    
+hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_state.drop(["Election Set"], axis=1)*hisp_conf_W3_state.drop(["Election Set"], axis=1)    
 hisp_weight_state["Election Set"] = elec_sets
 neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
 neither_weight_state["Election Set"] = elec_sets
@@ -775,7 +775,7 @@ for step in chain:
 
      #store plans        
     if (step["vra_score"] > best_score and run_type != 'free') or step_Num == 0:
-        store_plans["Best Map {}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
+        store_plans["{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
         best_score = step["vra_score"]
     if step["vra_score"] == temp_score:
         stuck_step += 1
@@ -802,9 +802,14 @@ pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), mode = 'a', 
 sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 centroids_df.to_csv(DIR + "centroids_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 #vra data
-final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+if total_steps < store_interval:
+    final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
+    final_equal_prob_df.to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name),  index= False)
+    final_dist_prob_df.to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), index= False)
+else:  
+    final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+    final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+    final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
 ############# final print outs
 print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
 print("total moves", count_moves)
