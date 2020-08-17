@@ -138,15 +138,15 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-graph = Graph.from_geodataframe(state_gdf)
-graph.add_data(state_gdf)
-centroids = state_gdf.centroid
-c_x = centroids.x
-c_y = centroids.y
-for node in graph.nodes():
-    graph.nodes[node]["C_X"] = c_x[node]
-    graph.nodes[node]["C_Y"] = c_y[node]
-
+#graph = Graph.from_geodataframe(state_gdf)
+#graph.add_data(state_gdf)
+#centroids = state_gdf.centroid
+#c_x = centroids.x
+#c_y = centroids.y
+#for node in graph.nodes():
+#    graph.nodes[node]["C_X"] = c_x[node]
+#    graph.nodes[node]["C_Y"] = c_y[node]
+#
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
 cvap_types = ['CVAP', 'WCVAP', 'BCVAP', 'HCVAP']
@@ -322,14 +322,17 @@ for district in range(num_districts): #get vector of precinct values for each di
         dist_df = state_df[state_df.index.isin(partition.parts[district])][cols_of_interest]
         dist_df = dist_df[dist_df[cvap] > 0] #drop rows with that year's cvap = 0
         
-        black_share = list(dist_df[black_cvap]/dist_df[cvap])
-        hisp_share = list(dist_df[hisp_cvap]/dist_df[cvap])
+        dist_df['black share'] = list(dist_df[black_cvap]/dist_df[cvap])
+        dist_df['hisp share'] = list(dist_df[hisp_cvap]/dist_df[cvap])
                
         #run ER regressions for black and Latino voters
         #determine black and Latino preferred candidates and confidence preferred-cand is correct
         #we run Weighted Linear Regression, weighted by precinct CVAP
         pop_weights = list(dist_df[cvap]/sum(dist_df[cvap]))          
-        
+        if elec == '16P_President' and district == 49:
+            dist_df2 = dist_df.copy()
+            dist_df2["pop weights"] = pop_weights
+            dist_df2.to_csv("dist_df_test.csv")
         #double equation method means we run race share of CVAP on x-axis and 
         #candidate vote share of CVAP on y-axis
         black_norm_params = {}
@@ -337,18 +340,16 @@ for district in range(num_districts): #get vector of precinct values for each di
         for cand in candidates[elec].values():
             cand_cvap_share = list(dist_df["{}%CVAP".format(cand)])
                       
-        #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
-            mean, std = ER_run(cand,elec, district, black_share, cand_cvap_share,\
-                   pop_weights, black_norm_params, 50, '18P_Governor', "black", True )
-            black_norm_params[cand] = [mean, std]
-   
-            mean, std = ER_run(cand,elec, district, hisp_share, cand_cvap_share,\
-                   pop_weights, hisp_norm_params, 50, '18P_Governor', "hisp", True)
-            hisp_norm_params[cand] = [mean, std]
+        #regrss cand share of total vote on demo-share-CVAP, black and latino voters  
+            point_est, std = ER_run(cand,elec, district, dist_df[['black share', 'hisp share']], \
+                            cand_cvap_share, pop_weights)
+                                                                                
+            black_norm_params[cand] = [point_est[1], std]
+            hisp_norm_params[cand] = [point_est[0], std]
 
         #computing preferred candidate and confidence in that choice gives is weight 3
-        black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, 50, '18P_Governor', "black", True )
-        hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, 50, '18P_Governor', "hisp", True)
+        black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, 49, '16P_President', "black", True )
+        hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, 49, '16P_President', "hisp", True)
         if elec in primary_elecs:
             black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
             black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = black_er_conf
@@ -487,5 +488,6 @@ for dist in dist_tests:
         district_df.to_excel(writer, sheet_name = "District {}, {} Model".format(dist, model_mode), index = False)
 
     writer.save()
+
 
 

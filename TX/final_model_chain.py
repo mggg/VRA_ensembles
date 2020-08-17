@@ -79,7 +79,7 @@ start_time_total = time.time()
 total_steps = 0
 pop_tol = .005 #U.S. Cong
 assignment1= 'CD' #CD, sldl358, sldu172, sldl309
-run_name = 'sldl358' #sys.argv[1]
+run_name = 'CD' #sys.argv[1]
 run_type = 'free' #sys.argv[3] #(free, hill_climb, sim_anneal)
 min_group = 'hisp' #sys.argv[4] # (black, hisp, both)
 model_mode = 'equal' #sys.argv[2] #'district', equal, statewide
@@ -361,8 +361,8 @@ def final_elec_model(partition):
             dist_df = state_df[state_df.index.isin(partition.parts[district])][cols_of_interest]
             dist_df = dist_df[dist_df[cvap] > 0] #drop rows with that year's cvap = 0
             
-            black_share = list(dist_df[black_cvap]/dist_df[cvap])
-            hisp_share = list(dist_df[hisp_cvap]/dist_df[cvap])
+            dist_df['black share'] = list(dist_df[black_cvap]/dist_df[cvap])
+            dist_df['hisp share'] = list(dist_df[hisp_cvap]/dist_df[cvap])
                    
             #run ER regressions for black and Latino voters
             #determine black and Latino preferred candidates and confidence preferred-cand is correct
@@ -377,13 +377,11 @@ def final_elec_model(partition):
                 cand_cvap_share = list(dist_df["{}%CVAP".format(cand)])
                           
             #regrss cand share of total vote on demo-share-CVAP, black and latino voters                                                                                  
-                mean, std = ER_run(cand,elec, district, black_share, cand_cvap_share,\
-                       pop_weights, black_norm_params)
-                black_norm_params[cand] = [mean, std]
-       
-                mean, std = ER_run(cand,elec, district, hisp_share, cand_cvap_share,\
-                       pop_weights, hisp_norm_params)
-                hisp_norm_params[cand] = [mean, std]
+                point_est, std = ER_run(cand,elec, district, dist_df[['black share', 'hisp share']], \
+                            cand_cvap_share, pop_weights)
+                                                                                
+                black_norm_params[cand] = [point_est[1], std]
+                hisp_norm_params[cand] = [point_est[0], std]
 
             #computing preferred candidate and confidence in that choice gives is weight 3
             black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params)

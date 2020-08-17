@@ -41,27 +41,30 @@ def f(x, params):
         product = product*ro
     return product
 
-def norm_dist_params(y, y_pred, sum_params, pop_weights): #y_predict is vector of predicted values, sum_params is prediction when x = 100%
-    mean = sum_params #predicted value at x = 100%
+def norm_dist_params(y, y_pred, pop_weights, num_races): #y_predict is vector of predicted values, sum_params is prediction when x = 100% #predicted value at x = 100%
     n = len(y)
     y_resid = [len(pop_weights)*w_i*(y_i - y_hat)**2 for w_i,y_i, y_hat in zip(pop_weights,y,y_pred)]
-    var = sum(y_resid)/(n-2)   
+    var = sum(y_resid)/(n-(num_races+1))   
     std = np.sqrt(var)
-    return mean, std #CHECK- std not var right?
+    return std #CHECK- std not var right?
 
-def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
-           share_norm_params_dict, display_dist = 1, display_elec = 1,race = 1, verbose_bool = False):
-    group_share_add = sm.add_constant(group_share)
-    model = sm.WLS(cand_cvap_share, group_share_add, weights = pop_weights)            
+def ER_run(cand, elec, district, X, cand_cvap_share, pop_weights, \
+           display_dist = 1, display_elec = 1,race = 1, verbose_bool = False):
+    num_races = len(X.columns)
+    X_add = sm.add_constant(X)
+    model = sm.WLS(cand_cvap_share, X_add, weights = pop_weights)            
     model = model.fit()
     cand_cvap_share_pred = model.predict()
-    mean, std = norm_dist_params(cand_cvap_share, cand_cvap_share_pred, sum(model.params), pop_weights)
+    ER_inputs = [(1,0,1), (1,1,0)] if num_races == 2 else [(1,1)] 
+    ER_point_est = [model.predict(i) for i in ER_inputs] 
+    
+    std = norm_dist_params(cand_cvap_share, cand_cvap_share_pred, pop_weights, num_races)
     if district == display_dist and elec == display_elec and verbose_bool:
-        print("num precincts in dist:", len(group_share))
+        print("num precincts in dist:", len(X))
         plt.figure(figsize=(12, 6))
-        plt.scatter(group_share, cand_cvap_share, c = pop_weights, cmap = 'viridis_r')  
+        plt.scatter(X, cand_cvap_share, c = pop_weights, cmap = 'viridis_r')  
             # scatter plot showing actual data
-        plt.plot(group_share +[1], list(cand_cvap_share_pred) + [sum(model.params)], 'r', linewidth=2) #extend lin regresssion line to 1
+        plt.plot(X +[1], list(cand_cvap_share_pred) + [sum(model.params)], 'r', linewidth=2) #extend lin regresssion line to 1
         plt.xticks(np.arange(0,1.1,.1))
         plt.yticks(np.arange(0,1.1,.1))
         plt.xlabel("{} share of Precinct CVAP".format(race))
@@ -69,7 +72,7 @@ def ER_run(cand, elec, district, group_share, cand_cvap_share, pop_weights, \
         plt.title("ER, {} support for {}, district {}".format(race, cand, district+1))
         plt.savefig(DIR + "outputs/{}_{}_support_{}_{}.png".format(race, cand, district+1, elec))
     
-    return mean, std
+    return ER_point_est, std
 
 def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_elec = 1,
                  race = 1, verbose_bool = False):
@@ -230,9 +233,12 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
         
-    return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
-            black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
-            neither_points_accrued, primary_second_df
+    if single_map:
+        return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
+                black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
+                neither_points_accrued, primary_second_df
+    else:
+        return dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
     
  
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df, hisp_pref_cands_df, \
