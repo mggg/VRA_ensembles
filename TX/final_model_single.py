@@ -52,7 +52,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from run_functions import f, norm_dist_params, ER_run, preferred_cand, compute_final_dist, compute_W2
+from run_functions import f, norm_dist_params, ER_run, preferred_cand, compute_final_dist, compute_W2, prob_conf_conversion
 from ast import literal_eval
 #############################################################################################################
 #DATA PREP AND INPUTS:
@@ -77,10 +77,10 @@ C_Y = "C_Y"
 #run parameters
 start_time_total = time.time()
 pop_tol = .005 #U.S. Cong
-assignment1= 'sldl358' #CD, sldl358, sldu172, sldl309
+assignment1= 'CD' #CD, sldl358, sldu172, sldl309
 
 #fixed parameters
-num_districts = 150 #150 state house, 31 senate, 36 Cong
+num_districts = 36 #150 state house, 31 senate, 36 Cong
 cand_drop_thresh = 0
 
 plot_path = 'tx-results-cvap-sl-adjoined/tx-results-cvap-sl-adjoined.shp'  #for shapefile
@@ -96,7 +96,15 @@ elec_cand_list = list(election_returns.columns)[2:]
 recency_weights = pd.read_csv("recency_weights.csv")
 min_cand_weights = pd.read_csv("min_pref_weight_binary.csv")
 cand_race_table = pd.read_csv("CandidateRace.csv")
-EI_statewide = pd.read_csv("EI_statewide_data.csv")
+EI_statewide = pd.read_csv("statewide_rxc_EI_preferences.csv")
+
+#reformate elec and cand names 
+EI_statewide = EI_statewide.replace({'US_Sen':'U.S. Sen'}, regex=True)
+EI_statewide = EI_statewide.replace({'Lt_Gov':'Lt. Gov'}, regex=True)
+EI_statewide = EI_statewide.replace({'Ag_Comm':'Ag Comm'}, regex=True)
+EI_statewide = EI_statewide.replace({'Land_Comm':'Land Comm'}, regex=True)
+EI_statewide = EI_statewide.replace({'RR_Comm_1':'RR Comm 1'}, regex=True)
+EI_statewide = EI_statewide.replace({'RR_Comm_3':'RR Comm 3'}, regex=True)
 
 #set up elections data structures
 elecs_bool = ~elec_data.Election.isin(list(dropped_elecs))
@@ -121,7 +129,6 @@ state_gdf["sldu172"] = state_gdf["sldu172"] - 1
 state_gdf["sldl358"] = state_gdf["sldl358"] - 1
 state_gdf["sldl309"] = state_gdf["sldl309"] - 1
 state_gdf.columns = state_gdf.columns.str.replace("-", "_")
-
 
 #replace cut-off candidate names from shapefile with full names
 election_return_cols = list(election_returns.columns)
@@ -204,6 +211,8 @@ black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
 black_conf_W3_state["Election Set"] = elec_sets
 hisp_conf_W3_state= pd.DataFrame(columns = range(num_districts))
 hisp_conf_W3_state["Election Set"] = elec_sets 
+neither_conf_W3_state = pd.DataFrame(columns = range(num_districts))
+neither_conf_W3_state["Election Set"] = elec_sets
 
 #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
 for elec_set in elec_sets:
@@ -215,25 +224,24 @@ for elec_set in elec_sets:
 for elec in primary_elecs + runoff_elecs:
     for district in range(num_districts):
         if elec in primary_elecs:
-            black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
-            hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
-            black_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Confidence"].values[0]
-            hisp_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Confidence"].values[0]               
+            black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
+            hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
+            black_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0]
+            hisp_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "prob"].values[0]               
             
             black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
+            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_ei_prob)
             hisp_pref_cands_prim_state.at[hisp_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
+            hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_ei_prob)                                             
+            neither_conf_W3_state.at[neither_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_ei_prob*black_ei_prob)                                             
+                        
         else:
-            black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
-            hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
+            black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
+            hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
                         
             black_pref_cands_runoffs_state.at[black_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand       
             hisp_pref_cands_runoffs_state.at[hisp_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
            
-#neither computation is based on results of black and latino computations
-neither_conf_W3_state = black_conf_W3_state.drop(["Election Set"], axis = 1)*hisp_conf_W3_state.drop(["Election Set"], axis =1)
-neither_conf_W3_state["Election Set"] = elec_sets
    
 min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = compute_W2(elec_sets, \
               range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, hisp_pref_cands_prim_state, cand_race_dict)
@@ -303,6 +311,7 @@ black_conf_W3_dist = pd.DataFrame(columns = range(num_districts))
 black_conf_W3_dist["Election Set"] = elec_sets
 hisp_conf_W3_dist = pd.DataFrame(columns = range(num_districts))
 hisp_conf_W3_dist["Election Set"] = elec_sets  
+#TODO change neither set up here when we move to district probabiltiies!!
     ##########################################################################################
 #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes
 #to compute district weights, preferred candidate and confidence is computed
@@ -329,10 +338,6 @@ for district in range(num_districts): #get vector of precinct values for each di
         #determine black and Latino preferred candidates and confidence preferred-cand is correct
         #we run Weighted Linear Regression, weighted by precinct CVAP
         pop_weights = list(dist_df[cvap]/sum(dist_df[cvap]))          
-        if elec == '16P_President' and district == 49:
-            dist_df2 = dist_df.copy()
-            dist_df2["pop weights"] = pop_weights
-            dist_df2.to_csv("dist_df_test.csv")
         #double equation method means we run race share of CVAP on x-axis and 
         #candidate vote share of CVAP on y-axis
         black_norm_params = {}
@@ -344,10 +349,11 @@ for district in range(num_districts): #get vector of precinct values for each di
             point_est, std = ER_run(cand,elec, district, dist_df[['black share', 'hisp share']], \
                             cand_cvap_share, pop_weights)
                                                                                 
-            black_norm_params[cand] = [point_est[1], std]
             hisp_norm_params[cand] = [point_est[0], std]
-
+            black_norm_params[cand] = [point_est[1], std]
+            
         #computing preferred candidate and confidence in that choice gives is weight 3
+        #TODO PUT IN ER PROB TO CONF and fix neither as well!!
         black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params, 49, '16P_President', "black", True )
         hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params, 49, '16P_President', "hisp", True)
         if elec in primary_elecs:
@@ -355,6 +361,7 @@ for district in range(num_districts): #get vector of precinct values for each di
             black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = black_er_conf
             hisp_pref_cands_prim_dist.at[hisp_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
             hisp_conf_W3_dist.at[hisp_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = hisp_er_conf         
+            
         else:
             black_pref_cands_runoffs_dist.at[black_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
             hisp_pref_cands_runoffs_dist.at[hisp_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
@@ -401,11 +408,32 @@ final_dist_prob_dict, black_pref_wins_dist, hisp_pref_wins_dist, neither_pref_wi
          black_weight_dist, hisp_weight_dist, dist_elec_results, range(num_districts),
          cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, True)
 ################################################## 
+#make maps
+model_modes = ['district', 'statewide', 'equal']
+for mode in model_modes:
+    final_prob = final_dist_prob_dict if mode == 'district' else final_state_prob_dict if mode == 'statewide' \
+                    else final_equal_prob_dict
+    cols = list(final_prob.keys())
+    state_gdf["Display Map"] = state_gdf[assignment1].astype(int)        
+    dissolved_map = state_gdf.copy().dissolve(by = "Display Map", aggfunc = sum)
+    dissolved_map = dissolved_map.reset_index()
+    dissolved_map["Display Map"] = dissolved_map["Display Map"].astype(int)
+    black_percents = {district: (dist[1]+ dist[3]) for district,dist in final_prob.items()} 
+    hisp_percents = {district: (dist[0]+ dist[3]) for district,dist in final_prob.items()} 
+    
+    dissolved_map["Black Effective"] = dissolved_map["Display Map"].map(black_percents)
+    dissolved_map["Latino Effective"] = dissolved_map["Display Map"].map(hisp_percents)
+    
+    dissolved_map.plot(column = "Black Effective", edgecolor= 'black', legend = True, vmin = 0, vmax = 1, figsize = (10,10))
+    plt.axis("off")
+    plt.title("Effective Black Districts: {} score".format(mode))
+    
+    dissolved_map.plot(column = "Latino Effective", edgecolor= 'black', legend = True, vmin = 0, vmax = 1, figsize = (10,10))
+    plt.axis("off")
+    plt.title("Effective Latino Districts: {} score".format(mode))
 
 #district deep dives
-dist_tests = [50, 51] #reg iindex
-model_modes = ['district', 'statewide', 'equal']
-
+dist_tests = [] #reg iindex
 for dist in dist_tests:
     writer = pd.ExcelWriter(DIR + 'outputs/District {}, map {} analysis.xlsx'.format(dist, assignment1), engine = 'xlsxwriter')
     for model_mode in model_modes:

@@ -52,7 +52,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from run_functions import f, norm_dist_params, ER_run, preferred_cand, compute_final_dist, compute_W2
+from run_functions import f, norm_dist_params, ER_run, preferred_cand, compute_final_dist, compute_W2, prob_conf_conversion
 from ast import literal_eval
 #############################################################################################################
 #DATA PREP AND INPUTS:
@@ -76,13 +76,13 @@ C_Y = "C_Y"
 
 #run parameters
 start_time_total = time.time()
-total_steps = 0
+total_steps = 10000
 pop_tol = .005 #U.S. Cong
 assignment1= 'CD' #CD, sldl358, sldu172, sldl309
-run_name = 'CD' #sys.argv[1]
-run_type = 'free' #sys.argv[3] #(free, hill_climb, sim_anneal)
+run_name = 'cutoff_test' #sys.argv[1]
+run_type = 'hill_climb' #sys.argv[3] #(free, hill_climb, sim_anneal)
 min_group = 'hisp' #sys.argv[4] # (black, hisp, both)
-model_mode = 'equal' #sys.argv[2] #'district', equal, statewide
+model_mode = 'statewide' #sys.argv[2] #'district', equal, statewide
 start_map = 'enacted' #sys.argv[5] #'enacted' or random
 #additional parameters for opimization runs:
 #need if running hillclimb with bound
@@ -100,7 +100,7 @@ degrandy_black = 5 #4.69 rounded up
 cand_drop_thresh = 0
 
 plot_path = 'tx-results-cvap-sl-adjoined/tx-results-cvap-sl-adjoined.shp'  #for shapefile
-store_interval = 5 #how many steps until storage
+store_interval = 2000 #how many steps until storage
 stuck_length = 1000 #steps at same score until break
 DIR = ''
 
@@ -114,7 +114,15 @@ elec_cand_list = list(election_returns.columns)[2:]
 recency_weights = pd.read_csv("recency_weights.csv")
 min_cand_weights = pd.read_csv("min_pref_weight_binary.csv")
 cand_race_table = pd.read_csv("CandidateRace.csv")
-EI_statewide = pd.read_csv("EI_statewide_data.csv")
+EI_statewide = pd.read_csv("statewide_rxc_EI_preferences.csv")
+model_cutoffs = pd.read_csv("cutoffs.csv")
+#reformate elec and cand names 
+EI_statewide = EI_statewide.replace({'US_Sen':'U.S. Sen'}, regex=True)
+EI_statewide = EI_statewide.replace({'Lt_Gov':'Lt. Gov'}, regex=True)
+EI_statewide = EI_statewide.replace({'Ag_Comm':'Ag Comm'}, regex=True)
+EI_statewide = EI_statewide.replace({'Land_Comm':'Land Comm'}, regex=True)
+EI_statewide = EI_statewide.replace({'RR_Comm_1':'RR Comm 1'}, regex=True)
+EI_statewide = EI_statewide.replace({'RR_Comm_3':'RR Comm 3'}, regex=True)
 
 #set up elections data structures
 elecs_bool = ~elec_data.Election.isin(list(dropped_elecs))
@@ -222,6 +230,8 @@ black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
 black_conf_W3_state["Election Set"] = elec_sets
 hisp_conf_W3_state = pd.DataFrame(columns = range(num_districts))
 hisp_conf_W3_state["Election Set"] = elec_sets 
+neither_conf_W3_state = pd.DataFrame(columns = range(num_districts))
+neither_conf_W3_state["Election Set"] = elec_sets
 
 #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
 for elec_set in elec_sets:
@@ -233,26 +243,24 @@ for elec_set in elec_sets:
 for elec in primary_elecs + runoff_elecs:
     for district in range(num_districts):
         if elec in primary_elecs:
-            black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
-            hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
-            black_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Confidence"].values[0]
-            hisp_ei_conf = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Confidence"].values[0]               
+            black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
+            hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
+            black_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0]
+            hisp_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "prob"].values[0]               
             
             black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = black_ei_conf
+            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_ei_prob)
             hisp_pref_cands_prim_state.at[hisp_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-            hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = hisp_ei_conf                                             
+            hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_ei_prob)                                             
+            neither_conf_W3_state.at[neither_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_ei_prob*black_ei_prob)                                             
+            
         else:
-            black_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Black Pref Cand"].values[0]
-            hisp_pref_cand = EI_statewide.loc[EI_statewide["Election"] == elec, "Latino Pref Cand"].values[0]
+            black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
+            hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
                         
             black_pref_cands_runoffs_state.at[black_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand       
             hisp_pref_cands_runoffs_state.at[hisp_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-           
-#neither computation is based on results of black and latino computations
-neither_conf_W3_state = black_conf_W3_state.drop(["Election Set"], axis = 1)*hisp_conf_W3_state.drop(["Election Set"], axis =1)
-neither_conf_W3_state["Election Set"] = elec_sets
-   
+              
 min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = compute_W2(elec_sets, \
               range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, hisp_pref_cands_prim_state, cand_race_dict)
 
@@ -380,9 +388,9 @@ def final_elec_model(partition):
                 point_est, std = ER_run(cand,elec, district, dist_df[['black share', 'hisp share']], \
                             cand_cvap_share, pop_weights)
                                                                                 
-                black_norm_params[cand] = [point_est[1], std]
                 hisp_norm_params[cand] = [point_est[0], std]
-
+                black_norm_params[cand] = [point_est[1], std]
+                
             #computing preferred candidate and confidence in that choice gives is weight 3
             black_pref_cand, black_er_conf = preferred_cand(district, elec, black_norm_params)
             hisp_pref_cand, hisp_er_conf = preferred_cand(district, elec, hisp_norm_params)
@@ -436,7 +444,7 @@ def final_elec_model(partition):
          final_dist_prob = {key:final_dist_prob_dict[key] for key in sorted(final_dist_prob_dict)}
     
      
-    elif step_Num % store_interval == 0 and step_Num > 0 and run_type != 'free':
+    elif step_Num % store_interval == 0 and step_Num > 0:
         final_state_prob = dict(final_state_prob_df.loc[store_interval-1])
         final_equal_prob = dict(final_equal_prob_df.loc[store_interval-1])
         final_dist_prob = dict(final_dist_prob_df.loc[store_interval-1])
@@ -458,12 +466,14 @@ def final_elec_model(partition):
     optimize_dict = final_state_prob if model_mode == 'statewide' else final_equal_prob\
                     if model_mode == 'equal' else final_dist_prob
                         
-
+    black_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'BCVAP')), 'Cutoff'].values[0]
+    hisp_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'HCVAP')), 'Cutoff'].values[0]
+    
     hisp_effective = [i+l for i,j,k,l in optimize_dict.values()]
     black_effective = [j+l for i,j,k,l in optimize_dict.values()]
     
-    total_hisp_final = len([z for z in hisp_effective if z > effective_thresh])
-    total_black_final = len([z for z in black_effective if z > effective_thresh])
+    total_hisp_final = len([z for z in hisp_effective if z > hisp_threshold])
+    total_black_final = len([z for z in black_effective if z > black_threshold])
      
     return final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
             total_hisp_final, total_black_final
@@ -630,10 +640,13 @@ step_Num = 0
 best_score = 0
 #run chain and collect data
 for step in chain:
+    
+    final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
+    total_hisp_final, total_black_final = step["final_elec_model"]
     #saving at intervals
     if step_Num % store_interval == 0 and step_Num > 0:
         store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
-
+        #dump data and reset data frames
         if step_Num == store_interval:
             pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), index = False)
             pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
@@ -665,12 +678,10 @@ for step in chain:
             last_dist_prob_dict = dict(zip(final_dist_prob_df.columns, final_dist_prob_df.loc[step_Num - 1]))
             final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
             final_dist_prob_df.loc[-1] = list(last_dist_prob_dict.values())
-            
-          
+                      
         else:
             pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-            pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-            
+            pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))            
             pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
             pres12_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
             sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
@@ -742,8 +753,7 @@ for step in chain:
     values = list(percents["SEN18"].values())
     sen18_df.loc[step_Num % store_interval] = [value for _,value in sorted(zip(keys,values))]
     
-    final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-    total_hisp_final, total_black_final = step["final_elec_model"]
+    
     
     if step_Num == 0:
         keys = list(final_state_prob_dict.keys())
@@ -798,7 +808,7 @@ white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode
 pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-centroids_df.to_csv(DIR + "centroids_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
+centroids_df.to_csv(DIR + "outputs/centroids_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 #vra data
 if total_steps < store_interval:
     final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)

@@ -55,10 +55,12 @@ def ER_run(cand, elec, district, X, cand_cvap_share, pop_weights, \
     model = sm.WLS(cand_cvap_share, X_add, weights = pop_weights)            
     model = model.fit()
     cand_cvap_share_pred = model.predict()
-    ER_inputs = [(1,0,1), (1,1,0)] if num_races == 2 else [(1,1)] 
+    ER_inputs = [(1,0,1), (1,1,0)] if num_races == 2 else [(1,1)]  #take out other!!
     ER_point_est = [model.predict(i) for i in ER_inputs] 
     
     std = norm_dist_params(cand_cvap_share, cand_cvap_share_pred, pop_weights, num_races)
+    
+    #3d Display fix
     if district == display_dist and elec == display_elec and verbose_bool:
         print("num precincts in dist:", len(X))
         plt.figure(figsize=(12, 6))
@@ -126,6 +128,33 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
         
         return pref_cand, pref_confidence
 
+#def preferred_cand2(district, elec, cand_norm_params, display_dist = 1, display_elec = 1,
+#                 race = 1, verbose_bool = False):
+#    if len(cand_norm_params) == 1:
+#            pref_cand = list(cand_norm_params.keys())[0]
+#            pref_confidence = 1
+#    else:
+#        cand_norm_params_copy = cand_norm_params.copy()
+#        dist1_index = max(cand_norm_params_copy.items(), key=operator.itemgetter(1))[0]
+#        dist1 = cand_norm_params_copy[dist1_index]
+#        del cand_norm_params_copy[dist1_index]
+#        dist2_index = max(cand_norm_params_copy.items(), key=operator.itemgetter(1))[0]
+#        dist2 = cand_norm_params_copy[dist2_index]        
+#        pref_cand = dist1_index        
+#        if district == display_dist and elec == display_elec and verbose_bool:
+#            print("elec", elec)
+#            print("race", race)
+#            print("params", cand_norm_params)
+#            print("first choice", dist1_index)
+#            print("second choice", dist2_index)
+#            print("conf in 1st:", pref_confidence)
+#        
+#        return pref_cand, pref_probability
+
+def prob_conf_conversion(cand_prob):
+    #parameters chosen to be 0-ish confidence until 50% then rapid ascenion to high confidence
+    cand_conf = 1/(1+np.exp(18-26*cand_prob))    
+    return cand_conf
 
 def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoffs,\
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
@@ -228,7 +257,9 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
     
     #uses ven diagram overlap/neither method
-    final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_changes))]
+    #final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_changes))]
+    final_neither = [min_neither[i] if neither_vra_prob[i] < min_neither[i] else max_neither[i] \
+                     if neither_vra_prob[i] > max_neither[i] else neither_vra_prob[i] for i in range(len(dist_changes))]
     final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_changes))]
     final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
@@ -271,3 +302,28 @@ def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,
         min_cand_neither_W2[dist] = neither_cand_weight
         
     return min_cand_black_W2, min_cand_hisp_W2, min_cand_neither_W2
+
+
+##linalg test
+#mean = np.matrix([[1], [2]])
+#covariance = np.matrix([
+#    [2, .8], 
+#    [0.8, 3]
+#])
+#
+##d = 2
+##
+##x = np.matrix([[1],[0]])
+##
+##
+##def multivariate_normal(x, d, mean, covariance):
+##    """pdf of the multivariate normal distribution."""
+##    x_m = x - mean
+##    return (1. / (np.sqrt((2 * np.pi)**d * np.linalg.det(covariance))) * 
+##            np.exp(-(np.linalg.solve(covariance, x_m).T.dot(x_m)) / 2))
+##
+##multivariate_normal(x, d, mean, covariance)
+#
+#from scipy.stats import multivariate_normal
+#var = multivariate_normal(mean=[1,2], cov=[[2,.8,], [.8,3]])
+#var.cdf([0,0])
