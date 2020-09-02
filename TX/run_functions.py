@@ -128,29 +128,6 @@ def preferred_cand(district, elec, cand_norm_params, display_dist = 1, display_e
         
         return pref_cand, pref_confidence
 
-#def preferred_cand2(district, elec, cand_norm_params, display_dist = 1, display_elec = 1,
-#                 race = 1, verbose_bool = False):
-#    if len(cand_norm_params) == 1:
-#            pref_cand = list(cand_norm_params.keys())[0]
-#            pref_confidence = 1
-#    else:
-#        cand_norm_params_copy = cand_norm_params.copy()
-#        dist1_index = max(cand_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-#        dist1 = cand_norm_params_copy[dist1_index]
-#        del cand_norm_params_copy[dist1_index]
-#        dist2_index = max(cand_norm_params_copy.items(), key=operator.itemgetter(1))[0]
-#        dist2 = cand_norm_params_copy[dist2_index]        
-#        pref_cand = dist1_index        
-#        if district == display_dist and elec == display_elec and verbose_bool:
-#            print("elec", elec)
-#            print("race", race)
-#            print("params", cand_norm_params)
-#            print("first choice", dist1_index)
-#            print("second choice", dist2_index)
-#            print("conf in 1st:", pref_confidence)
-#        
-#        return pref_cand, pref_probability
-
 def prob_conf_conversion(cand_prob):
     #parameters chosen to be 0-ish confidence until 50% then rapid ascenion to high confidence
     cand_conf = 1/(1+np.exp(18-26*cand_prob))    
@@ -304,26 +281,21 @@ def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,
     return min_cand_black_W2, min_cand_hisp_W2, min_cand_neither_W2
 
 
-##linalg test
-#mean = np.matrix([[1], [2]])
-#covariance = np.matrix([
-#    [2, .8], 
-#    [0.8, 3]
-#])
-#
-##d = 2
-##
-##x = np.matrix([[1],[0]])
-##
-##
-##def multivariate_normal(x, d, mean, covariance):
-##    """pdf of the multivariate normal distribution."""
-##    x_m = x - mean
-##    return (1. / (np.sqrt((2 * np.pi)**d * np.linalg.det(covariance))) * 
-##            np.exp(-(np.linalg.solve(covariance, x_m).T.dot(x_m)) / 2))
-##
-##multivariate_normal(x, d, mean, covariance)
-#
-#from scipy.stats import multivariate_normal
-#var = multivariate_normal(mean=[1,2], cov=[[2,.8,], [.8,3]])
-#var.cdf([0,0])
+#to aggregrate precinct EI to district EI for district model mode
+def cand_pref_all(prec_quant_df, dist_prec_list, bases, outcomes, sample_size = 1000 ):
+    ''' 
+    prec_quant_df: precinct ei data drame
+    dist_prec_list: list of precinct ids (for TX, CTYVTDS)
+    bases: all demog/election/cand column name bases
+    outcomes: dictionary of demog/elec pair to relavent column name bases
+    sample_size: how many draws from precinct distributions
+    '''
+    quant_vals = [0,125,250,375,500,625,750,875,1000]
+    dist_prec_quant = prec_quant_df[prec_quant_df['CNTYVTD'].isin(dist_prec_list)]    
+    draws = {}
+    for base in bases:
+        vec_rand = np.random.rand(sample_size,len(dist_prec_quant))
+        vec_rand_shift = np.array(dist_prec_quant[base +'.'+ '0'])+ sum(np.minimum(np.maximum(vec_rand-quant_vals[qv]/1000,0),.125)*8*np.array(dist_prec_quant[base + '.' +  str(quant_vals[qv+1])]-dist_prec_quant[base + '.'+ str(quant_vals[qv])]) for qv in range(len(quant_vals)-1))
+        draws[base] = vec_rand_shift.sum(axis=1)  
+        
+    return {outcome:{base.split('.')[1].split('_counts')[0]:sum([1 if draws[base][i]==max([draws[base_][i] for base_ in outcomes[outcome]]) else 0 for i in range(sample_size)])/sample_size for base in outcomes[outcome]} for outcome in outcomes.keys()}
