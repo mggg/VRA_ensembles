@@ -72,10 +72,10 @@ C_Y = "C_Y"
 #run parameters
 start_time_total = time.time()
 pop_tol = .005 #U.S. Cong
-assignment1= 'sldl309' #CD, sldl358, sldu172, sldl309
+assignment1= 'CD' #CD, sldl358, sldu172, sldl309
 
 #fixed parameters
-num_districts = 150 #150 state house, 31 senate, 36 Cong
+num_districts = 36 #150 state house, 31 senate, 36 Cong
 cand_drop_thresh = 0
 
 plot_path = 'tx-results-cvap-sl-adjoined/tx-results-cvap-sl-adjoined.shp'  #for shapefile
@@ -486,7 +486,7 @@ for mode in model_modes:
     district_effect["Overlap Effective {}".format(mode)] = district_effect["District"].map(overlap_percents)
 
 district_effect["District"] = district_effect["District"] + 1
-district_effect.to_csv("outputs/Map Distributions {}.csv".format(assignment1), index = False)
+district_effect.to_csv("outputs/Map Distributions {}_noPop.csv".format(assignment1), index = False)
 
 #
 ##district deep dives

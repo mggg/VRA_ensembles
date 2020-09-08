@@ -234,19 +234,21 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     #feed through logit:
     #if logit == True etc.
     
-  #  min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_changes))]
-  #  max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
+    min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_changes))]
+    max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
     
-    #uses ven diagram overlap/neither method
-    #final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_changes))]
-    final_neither = neither_vra_prob
-    #[min_neither[i] if neither_vra_prob[i] < min_neither[i] else max_neither[i] \
-    #                 if neither_vra_prob[i] > max_neither[i] else neither_vra_prob[i] for i in range(len(dist_changes))]
-    final_overlap = ["N/A"]*len(dist_changes)
-   # [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_changes))]
-    final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
-    final_hisp_prob = hisp_vra_prob #[hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+    #uses ven diagram overlap/neither method 
+    final_neither = [min_neither[i] if neither_vra_prob[i] < min_neither[i] else max_neither[i] \
+                     if neither_vra_prob[i] > max_neither[i] else neither_vra_prob[i] for i in range(len(dist_changes))]    
+    final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_changes))]
+    final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+    final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     
+    #when fitting logit
+    #final_neither = neither_vra_prob
+    #final_overlap = ["N/A"]*len(dist_changes)
+    #final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+    #final_hisp_prob = hisp_vra_prob
     if single_map:
         return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
                 black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \

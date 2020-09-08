@@ -77,11 +77,11 @@ C_Y = "C_Y"
 
 #run parameters
 start_time_total = time.time()
-total_steps = 0
+total_steps = 10
 pop_tol = .1 #U.S. Cong
 assignment1= 'sldu172' #CD, sldl358, sldu172, sldl309
 run_name = 'sldu172' #sys.argv[1]
-run_type = 'hill_climb' #sys.argv[3] #(free, hill_climb, sim_anneal)
+run_type = 'hill_climb_align_test' #sys.argv[3] #(free, hill_climb, sim_anneal)
 min_group = 'hisp' #sys.argv[4] # (black, hisp, both)
 model_mode = 'statewide' #sys.argv[2] #'district', equal, statewide
 start_map = 'enacted' #sys.argv[5] #'enacted' or random
@@ -186,14 +186,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-#graph = Graph.from_geodataframe(state_gdf)
-#graph.add_data(state_gdf)
-#centroids = state_gdf.centroid
-#c_x = centroids.x
-#c_y = centroids.y
-#for node in graph.nodes():
-#    graph.nodes[node]["C_X"] = c_x[node]
-#    graph.nodes[node]["C_Y"] = c_y[node]
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
 
 #CVAP in ER regressions will correspond to year
 #this dictionary matches year and CVAP type to relevant data column 
@@ -399,7 +399,7 @@ def final_elec_model(partition):
         #only need preferred candidates and condidence in primary and runoffs
         #(in Generals we only care if the Democrat wins)
         dist_prec_list =  list(state_gdf[state_gdf[assignment1] == district][geo_id])
-        district_support_all = cand_pref_all(prec_ei_df, dist_prec_list, bases, outcomes, sample_size = 1000)        
+        district_support_all = cand_pref_all(prec_ei_df, dist_prec_list, bases, outcomes, sample_size = 200)        
         cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
         for elec in primary_elecs + runoff_elecs:                    
             HCVAP_support_elec = district_support_all[('HCVAP', elec)]
@@ -414,9 +414,9 @@ def final_elec_model(partition):
             hisp_pref_cand_state = hisp_pref_cands_prim_state.loc[hisp_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district].values[0]
             #computing preferred candidate and confidence in that choice gives is weight 3        
             if elec in primary_elecs:
-                black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+                black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
                 black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_pref_prob_dist)
-                hisp_pref_cands_prim_dist.at[hisp_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+                hisp_pref_cands_prim_dist.at[hisp_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand_dist
                 hisp_conf_W3_dist.at[hisp_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_pref_prob_dist)        
                 neither_conf_W3_dist.at[neither_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_pref_prob_dist*black_pref_prob_dist)        
                 
@@ -431,8 +431,8 @@ def final_elec_model(partition):
                 sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand_state])/(sum(cand_counts_dist["BCVAP"+ '.' + hisp_pref_cand_state]) + sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand_state]) + sum(cand_counts_dist["WCVAP"+ '.' + hisp_pref_cand_state]))
             
             else:
-                black_pref_cands_runoffs_dist.at[black_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-                hisp_pref_cands_runoffs_dist.at[hisp_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
+                black_pref_cands_runoffs_dist.at[black_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
+                hisp_pref_cands_runoffs_dist.at[hisp_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand_dist
     
     black_align_prim_dist =  black_align_prim_dist.drop(['Election Set'], axis = 1).applymap(lambda x: min(1, 2*x))        
     hisp_align_prim_dist =  hisp_align_prim_dist.drop(['Election Set'], axis = 1).applymap(lambda x: min(1, 2*x))         
@@ -676,7 +676,7 @@ step_Num = 0
 best_score = 0
 #run chain and collect data
 for step in chain:
-    
+    print("step", step_Num)
     final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
     total_hisp_final, total_black_final = step["final_elec_model"]
     #saving at intervals
