@@ -137,7 +137,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
                  black_weight_df, hisp_weight_df, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
-                 elec_sets, elec_set_dict, single_map = False):
+                 elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, logit = False, single_map = False):
     #determine if election set accrues points by district for black and Latino voters
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
@@ -226,21 +226,27 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     
 ########################################################################################
     #Compute district probabilities: black, Latino, neither and overlap 
-    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum(black_points_accrued[i])/sum(black_weight_df[i]) for i in dist_changes]
-    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum(hisp_points_accrued[i])/sum(hisp_weight_df[i]) for i in dist_changes]   
+    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum((black_points_accrued.drop(['Election Set'], axis = 1)*black_align_prim)[i])/sum(black_weight_df[i]) for i in dist_changes]
+    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum((hisp_points_accrued.drop(['Election Set'], axis = 1)*hisp_align_prim)[i])/sum(hisp_weight_df[i]) for i in dist_changes]   
+      
     neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_changes]   
+               
+    #feed through logit:
+    #if logit == True etc.
     
-    min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_changes))]
-    max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
+  #  min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_changes))]
+  #  max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
     
     #uses ven diagram overlap/neither method
     #final_neither = [min_neither[i] + neither_vra_prob[i]*(max_neither[i]-min_neither[i]) for i in range(len(dist_changes))]
-    final_neither = [min_neither[i] if neither_vra_prob[i] < min_neither[i] else max_neither[i] \
-                     if neither_vra_prob[i] > max_neither[i] else neither_vra_prob[i] for i in range(len(dist_changes))]
-    final_overlap = [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_changes))]
-    final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
-    final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
-        
+    final_neither = neither_vra_prob
+    #[min_neither[i] if neither_vra_prob[i] < min_neither[i] else max_neither[i] \
+    #                 if neither_vra_prob[i] > max_neither[i] else neither_vra_prob[i] for i in range(len(dist_changes))]
+    final_overlap = ["N/A"]*len(dist_changes)
+   # [final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1 for i in range(len(dist_changes))]
+    final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+    final_hisp_prob = hisp_vra_prob #[hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+    
     if single_map:
         return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
                 black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
