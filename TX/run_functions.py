@@ -137,7 +137,8 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
                  black_weight_df, hisp_weight_df, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
-                 elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, logit = False, single_map = False):
+                 elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, \
+                 mode, logit_params, logit = False, single_map = False):
     #determine if election set accrues points by district for black and Latino voters
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
@@ -227,12 +228,21 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
 ########################################################################################
     #Compute district probabilities: black, Latino, neither and overlap 
     black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum((black_points_accrued.drop(['Election Set'], axis = 1)*black_align_prim)[i])/sum(black_weight_df[i]) for i in dist_changes]
-    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum((hisp_points_accrued.drop(['Election Set'], axis = 1)*hisp_align_prim)[i])/sum(hisp_weight_df[i]) for i in dist_changes]   
-      
+    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum((hisp_points_accrued.drop(['Election Set'], axis = 1)*hisp_align_prim)[i])/sum(hisp_weight_df[i]) for i in dist_changes]         
     neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_changes]   
                
     #feed through logit:
-    #if logit == True etc.
+    if logit == True:
+        logit_coef_black = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Black'), 'coef'].values[0]
+        logit_intercept_black = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Black'), 'intercept'].values[0]
+        logit_coef_hisp = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Latino'), 'coef'].values[0]
+        logit_intercept_hisp = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Latino'), 'intercept'].values[0]
+        logit_coef_neither = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Neither'), 'coef'].values[0]
+        logit_intercept_neither = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Neither'), 'intercept'].values[0]
+                
+        black_vra_prob = [1/(1+np.exp(-(logit_coef_black*y+logit_intercept_black))) for y in black_vra_prob]
+        hisp_vra_prob = [1/(1+np.exp(-(logit_coef_hisp*y+logit_intercept_hisp))) for y in hisp_vra_prob]
+        neither_vra_prob = [1/(1+np.exp(-(logit_coef_neither*y+logit_intercept_neither))) for y in neither_vra_prob]
     
     min_neither = [0 if (black_vra_prob[i] + hisp_vra_prob[i]) > 1 else 1 -(black_vra_prob[i] + hisp_vra_prob[i]) for i in range(len(dist_changes))]
     max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
@@ -245,10 +255,10 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     
     #when fitting logit
-    #final_neither = neither_vra_prob
-    #final_overlap = ["N/A"]*len(dist_changes)
-    #final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
-    #final_hisp_prob = hisp_vra_prob
+#    final_neither = neither_vra_prob
+#    final_overlap = ["N/A"]*len(dist_changes)
+#    final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
+#    final_hisp_prob = hisp_vra_prob
     if single_map:
         return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
                 black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
@@ -306,4 +316,14 @@ def cand_pref_all(prec_quant_df, dist_prec_list, bases, outcomes, sample_size = 
         vec_rand_shift = np.array(dist_prec_quant[base +'.'+ '0'])+ sum(np.minimum(np.maximum(vec_rand-quant_vals[qv]/1000,0),.125)*8*np.array(dist_prec_quant[base + '.' +  str(quant_vals[qv+1])]-dist_prec_quant[base + '.'+ str(quant_vals[qv])]) for qv in range(len(quant_vals)-1))
         draws[base] = vec_rand_shift.sum(axis=1)  
         
+    return {outcome:{base.split('.')[1].split('_counts')[0]:sum([1 if draws[base][i]==max([draws[base_][i] for base_ in outcomes[outcome]]) else 0 for i in range(sample_size)])/sample_size for base in outcomes[outcome]} for outcome in outcomes.keys()}
+
+def cand_pref_all_alt_qv(prec_quant_df, dist_prec_list, bases, outcomes, sample_size = 1000 ):
+    quant_vals = np.array([0,125,250,375,500,625,750,875,1000])
+    dist_prec_quant = prec_quant_df[prec_quant_df['CNTYVTD'].isin(dist_prec_list)]    
+    draws = {}
+    for base in bases:
+        vec_rand_shift = np.concatenate([np.random.rand(int(sample_size/8),len(dist_prec_quant))*(np.array(dist_prec_quant[base + '.' +  str(quant_vals[qv+1])])-np.array(dist_prec_quant[base + '.'+ str(quant_vals[qv])]))+np.array(dist_prec_quant[base + '.'+ str(quant_vals[qv])]) for qv in range(len(quant_vals)-1)])
+        list(map(np.random.shuffle, vec_rand_shift.T))
+        draws[base] = vec_rand_shift.sum(axis=1) 
     return {outcome:{base.split('.')[1].split('_counts')[0]:sum([1 if draws[base][i]==max([draws[base_][i] for base_ in outcomes[outcome]]) else 0 for i in range(sample_size)])/sample_size for base in outcomes[outcome]} for outcome in outcomes.keys()}
