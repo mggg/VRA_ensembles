@@ -71,14 +71,13 @@ C_Y = "C_Y"
 
 #run parameters
 
-total_steps = 100
-pop_tol = .1 #U.S. Cong
+total_steps = 20
+pop_tol = .01 #U.S. Cong
 assignment1= 'CD' #CD, sldl358, sldu172, sldl309
-run_name = 'free_test' #sys.argv[1]
-run_type = 'free' #sys.argv[3] #(free, hill_climb, sim_anneal)
-min_group = 'black' #sys.argv[4] # (black, hisp, both)
+run_name = 'opt_test_10_6' #sys.argv[1]
+run_type = 'vra_opt_accept' #sys.argv[3] #(free, hill_climb, sim_anneal, vra_
 model_mode = 'statewide' #sys.argv[2] #'district', equal, statewide
-start_map = 'enacted' #sys.argv[5] #'enacted' or random
+start_map = 'Seed1' #sys.argv[5] #'enacted' or random
 #additional parameters for opimization runs:
 #need if running hillclimb with bound
 bound = .1 #float(sys.argv[6]) 
@@ -87,24 +86,30 @@ cycle_length = 2000 #float(sys.argv[7])
 start_cool = 500 #float(sys.argv[8])
 stop_cool = 1500 #float(sys.argv[9])
 
-ensemble_inclusion = True#float(sys.argv[10])
-hour_cap = 60
+ensemble_inclusion = False#float(sys.argv[10])
+
+bound_type = 'good_bound' #sys.argv[11]
+beta = 5 #sys.argv[12]
 
 #fixed parameters
 num_districts = 36 #150 state house, 31 senate, 36 Cong
-degrandy_hisp = 11 #10.39 rounded up
+degrandy_hisp = 10 #10.39 rounded up
 degrandy_black = 5 #4.69 rounded up
 cand_drop_thresh = 0
-enacted_black = 3
-enacted_hisp = 7
+enacted_black = 4
+enacted_hisp = 8
 enacted_distinct = 11
 plot_path = 'tx-results-cvap-sl-adjoined/tx-results-cvap-sl-adjoined.shp'  #for shapefile
 store_interval = 20 #how many steps until storage
+
+#for district score function
+low_bound_score = .4
+upper_bound_score = .6
 DIR = ''
 
 #read files
 elec_data = pd.read_csv("TX_elections.csv")
-election_returns = pd.read_csv("TX_statewide_election_returns.csv")
+TX_columns = list(pd.read_csv("TX_columns.csv")["Columns"])
 dropped_elecs = pd.read_csv("dropped_elecs.csv")["Dropped Elections"]
 recency_weights = pd.read_csv("recency_weights.csv")
 min_cand_weights = pd.read_csv("min_pref_weight_binary.csv")
@@ -114,6 +119,9 @@ model_cutoffs = pd.read_csv("cutoffs.csv")
 prec_ei_df = pd.read_csv("prec_count_quants.csv", dtype = {'CNTYVTD':'str'})
 mean_prec_counts = pd.read_csv("mean_prec_vote_counts.csv", dtype = {'CNTYVTD':'str'})
 logit_params = pd.read_csv("align_adj_noPop_logit_params.csv")
+equal_seed_plans = pd.read_csv("seed_plans_equal.csv") 
+state_seed_plans = pd.read_csv("seed_plans_state.csv") 
+dist_seed_plans = pd.read_csv("seed_plans_dist.csv") 
 
 #reformate elec and cand names 
 elec_data = elec_data.replace({'U.S. Sen':'US_Sen'}, regex=True)
@@ -134,16 +142,16 @@ cand_race_table = cand_race_table.replace({'Ag Comm':'Ag_Comm'}, regex=True)
 cand_race_table = cand_race_table.replace({'Land Comm':'Land_Comm'}, regex=True)
 cand_race_table = cand_race_table.replace({'RR Comm 1':'RR_Comm_1'}, regex=True)
 cand_race_table = cand_race_table.replace({'RR Comm 3':'RR_Comm_3'}, regex=True)
-election_returns.columns = election_returns.columns.str.replace("U.S. Sen", "US_Sen")
-election_returns.columns = election_returns.columns.str.replace('Lt. Gov','Lt_Gov')
-election_returns.columns = election_returns.columns.str.replace('Ag Comm','Ag_Comm')
-election_returns.columns = election_returns.columns.str.replace("Land Comm", "Land_Comm")
-election_returns.columns = election_returns.columns.str.replace('RR Comm 1','RR_Comm_1')
-election_returns.columns = election_returns.columns.str.replace('RR Comm 3','RR_Comm_3')
+TX_columns = [sub.replace("U.S. Sen", "US_Sen") for sub in TX_columns] 
+TX_columns = [sub.replace('Lt. Gov','Lt_Gov') for sub in TX_columns] 
+TX_columns = [sub.replace('Ag Comm','Ag_Comm') for sub in TX_columns] 
+TX_columns = [sub.replace("Land Comm", "Land_Comm") for sub in TX_columns] 
+TX_columns = [sub.replace('RR Comm 1','RR_Comm_1') for sub in TX_columns] 
+TX_columns = [sub.replace('RR Comm 3','RR_Comm_3') for sub in TX_columns] 
 
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
-elec_cand_list = list(election_returns.columns)[2:] 
+elec_cand_list = TX_columns
 
 #set up elections data structures
 elecs_bool = ~elec_data.Election.isin(list(dropped_elecs))
@@ -170,40 +178,28 @@ state_gdf["sldl309"] = state_gdf["sldl309"] - 1
 state_gdf.columns = state_gdf.columns.str.replace("-", "_")
 
 #replace cut-off candidate names from shapefile with full names
-election_return_cols = list(election_returns.columns)
-cand1_index = election_return_cols.index('RomneyR_12G_President') #first
-cand2_index = election_return_cols.index('ObamaD_12P_President') #last
-elec_results_trunc = election_return_cols[cand1_index:cand2_index+1]
 state_gdf_cols = list(state_gdf.columns)
 cand1_index = state_gdf_cols.index('RomneyR_12')
 cand2_index = state_gdf_cols.index('ObamaD_12P')
-state_gdf_cols[cand1_index:cand2_index+1] = elec_results_trunc
+state_gdf_cols[cand1_index:cand2_index+1] = TX_columns
 state_gdf.columns = state_gdf_cols
 
 state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-#graph = Graph.from_geodataframe(state_gdf)
-#graph.add_data(state_gdf)
-#centroids = state_gdf.centroid
-#c_x = centroids.x
-#c_y = centroids.y
-#for node in graph.nodes():
-#    graph.nodes[node]["C_X"] = c_x[node]
-#    graph.nodes[node]["C_Y"] = c_y[node]
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
 
-
-#CVAP in ER regressions will correspond to year
-#this dictionary matches year and CVAP type to relevant data column 
-cvap_types = ['CVAP', 'WCVAP', 'BCVAP', 'HCVAP']
-cvap_codes = ['1', '7', '5', '13'] 
-cvap_key = dict(zip(cvap_types,cvap_codes ))
-cvap_years = [2012, 2014, 2016, 2018]
-cvap_columns = {year:  {t: cvap_key[t] + '_' + str(year) for t in cvap_types} for year in cvap_years}
 
 #make dictionary that maps an election to its candidates
-#only include 2 major party candidates in generals
+#only include 2 major party candidates in generals (assumes here major party candidates are first in candidate list)
 #only include candidates with > cand_drop_thresh of statewide vote share
 candidates = {}
 for elec in elections:
@@ -288,6 +284,7 @@ hisp_weight_state["Election Set"] = elec_sets
 neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
 neither_weight_state["Election Set"] = elec_sets
 
+#equal weights are all 
 black_weight_equal = pd.DataFrame(columns = range(num_districts))
 black_weight_equal[0] = [1]*len(elec_sets)
 hisp_weight_equal = pd.DataFrame(columns = range(num_districts))
@@ -504,19 +501,16 @@ def final_elec_model(partition):
     hisp_effective = [i+l for i,j,k,l in optimize_dict.values()]
     black_effective = [j+l for i,j,k,l in optimize_dict.values()]
     
-    hisp_effect_index = [i for i,n in enumerate(hisp_effective) if n > hisp_threshold]
-    black_effect_index = [i for i,n in enumerate(black_effective) if n > black_threshold]
+    hisp_effect_index = [i for i,n in enumerate(hisp_effective) if n >= hisp_threshold]
+    black_effect_index = [i for i,n in enumerate(black_effective) if n >= black_threshold]
     
     total_hisp_final = len(hisp_effect_index)
     total_black_final = len(black_effect_index)
     total_distinct = len(set(hisp_effect_index + black_effect_index))
      
     return final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-            total_hisp_final, total_black_final, total_distinct
-               
-    
-def num_cut_edges(partition):
-    return len(partition["cut_edges"])
+            total_hisp_final, total_black_final, total_distinct, optimize_dict
+                 
 
 def demo_percents(partition): 
     hisp_pct = {k: partition["HCVAP"][k]/partition["CVAP"][k] for k in partition["HCVAP"].keys()}
@@ -530,19 +524,30 @@ def centroids(partition):
     centroids = {k: (CXs[k], CYs[k]) for k in list(partition.parts.keys())}
     return centroids
 
-def num_splits(partition, df = state_gdf):
-    df["current"] = df.index.map(partition.assignment.to_dict())
-    return sum(df.groupby(county_split_id)['current'].nunique() > 1)
 
 def vra_score(partition):
     hisp_vra_dists = partition["final_elec_model"][3] 
-    black_vra_dists = partition["final_elec_model"][4]    
-    if min_group == 'black':
-        return black_vra_dists
-    if min_group == 'hisp':
-        return hisp_vra_dists
-    if min_group == 'both':
-        return black_vra_dists + hisp_vra_dists
+    black_vra_dists = partition["final_elec_model"][4]
+    distinct_dists = partition["final_elec_model"][5]
+    
+    print("step", step_Num)
+    print("worse than enacted", (hisp_vra_dists < enacted_hisp or black_vra_dists < enacted_black or distinct_dists < enacted_distinct))
+
+    if (hisp_vra_dists < enacted_hisp or black_vra_dists < enacted_black or distinct_dists < enacted_distinct):
+        return 0
+    else: 
+        print("better!", hisp_vra_dists, black_vra_dists)
+        print("score",  (hisp_vra_dists - enacted_hisp) + (black_vra_dists - enacted_black))
+        return (hisp_vra_dists - enacted_hisp) + (black_vra_dists - enacted_black)
+
+
+def district_score(elec_percent):
+    if elec_percent <= low_bound_score:
+        return 0
+    if elec_percent > low_bound_score and elec_percent <= upper_bound_score:
+        return (1/(upper_bound_score-low_bound_score))*elec_percent - low_bound_score/(upper_bound_score- low_bound_score)
+    else:
+        return 1
 
 my_updaters = {
     "population": updaters.Tally(tot_pop, alias = "population"),
@@ -553,8 +558,6 @@ my_updaters = {
     "Sum_CX": updaters.Tally(C_X, alias = "Sum_CX"),
     "Sum_CY": updaters.Tally(C_Y, alias = "Sum_CY"),
     "cut_edges": cut_edges,
-    "num_cut_edges": num_cut_edges,  
-    "num_splits": num_splits,
     "demo_percents": demo_percents,
     "final_elec_model": final_elec_model,
     "vra_score": vra_score,
@@ -589,10 +592,12 @@ my_updaters.update(election_updaters)
 step_Num = 0
 total_population = state_gdf[tot_pop].sum()
 ideal_population = total_population/num_districts
-random_assign = recursive_tree_part(graph, range(num_districts), ideal_population, tot_pop, pop_tol, node_repeats = 5)
-assignment = assignment1 if start_map == 'enacted' else random_assign
+seed_plans = state_seed_plans if model_mode == 'statewide' else equal_seed_plans if model_mode == 'equal' else dist_seed_plans
+
+assignment = assignment1 if start_map == 'enacted' else dict(zip(seed_plans["Index"], seed_plans[start_map]))
 initial_partition = GeographicPartition(graph = graph, assignment = assignment, updaters = my_updaters)
 
+initial_partition.plot()
 proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
 )
@@ -600,10 +605,9 @@ proposal = partial(
 
 #constraints
 def inclusion(partition):
-    print("attempt!")
     hisp_vra_dists = partition["final_elec_model"][3] 
     black_vra_dists = partition["final_elec_model"][4]    
-    total_distinct = partition["final_elec_model"][5]    
+    total_distinct = partition["final_elec_model"][5]   
     return total_distinct >= enacted_distinct and \
           black_vra_dists >= enacted_black and hisp_vra_dists >= enacted_hisp
           
@@ -638,8 +642,66 @@ def sim_anneal_accept(partition):
         else:
             draw = random.random()      
             return draw < (stop_cool - (step_Num % cycle_length))/(stop_cool - start_cool)     
-        
 
+def vra_opt_accept(partition):
+    if not partition.parent:
+        return True       
+    optimize_dict = partition["final_elec_model"][6]
+    optimize_dict_parent = partition.parent["final_elec_model"][6]
+        
+    hisp_effective = [i+l for i,j,k,l in optimize_dict.values()]
+    black_effective = [j+l for i,j,k,l in optimize_dict.values()]        
+    hisp_effective_parent = [i+l for i,j,k,l in optimize_dict_parent.values()]
+    black_effective_parent = [j+l for i,j,k,l in optimize_dict_parent.values()] 
+    max_effective = [max(i,j) for i,j in zip(hisp_effective, black_effective)]
+    max_effective_parent = [max(i,j) for i,j in zip(hisp_effective_parent, black_effective_parent)]
+        
+    hisp_district_scores = [district_score(k) for k in hisp_effective]
+    hisp_map_score = sum(hisp_district_scores)
+    hisp_district_scores_parent = [district_score(k) for k in hisp_effective_parent]
+    hisp_map_score_parent = sum(hisp_district_scores_parent)
+    
+    black_district_scores = [district_score(k) for k in black_effective]
+    black_map_score = sum(black_district_scores)
+    black_district_scores_parent = [district_score(k) for k in black_effective_parent]
+    black_map_score_parent = sum(black_district_scores_parent)  
+
+    hisp_effect_index = [i for i,n in enumerate(hisp_district_scores) if n >= 1]
+    black_effect_index = [i for i,n in enumerate(black_district_scores) if n >= 1]
+    hisp_effect_index_parent = [i for i,n in enumerate(hisp_district_scores_parent) if n >= 1]
+    black_effect_index_parent = [i for i,n in enumerate(black_district_scores_parent) if n >= 1]
+    
+    total_distinct = len(set(hisp_effect_index + black_effect_index))
+    total_distinct_parent = len(set(hisp_effect_index_parent + black_effect_index_parent))      
+        
+    bound = np.exp(beta*((hisp_map_score- hisp_map_score_parent) + \
+                      (black_map_score- black_map_score_parent) + \
+                      (total_distinct - total_distinct_parent)))
+    
+#    parent_highest_hisp_index = len([k for k in hisp_effective_parent if k >=.6])
+#    parent_highest_max_index = len([k for k in max_effective_parent if k >=.6])
+#
+#    HO_sum11_bound = np.exp(10*(sum(sorted(hisp_effective, reverse = True)[:11]) - sum(sorted(hisp_effective_parent, reverse = True)[:11])))
+#    HO_11th_bound =  np.exp(10*(sorted(hisp_effective, reverse = True)[10] - sorted(hisp_effective_parent, reverse = True)[10]))
+#    
+#    maxHB_sum15_bound = np.exp(10*(sum(sorted(max_effective, reverse = True)[:15]) - sum(sorted(max_effective_parent, reverse = True)[:15])))
+#    maxHB_15th_bound =  np.exp(10*(sorted(max_effective, reverse = True)[14] - sorted(max_effective_parent, reverse = True)[14]))
+#    
+#    highest_hisp_bound =  np.exp(10*(sorted(hisp_effective, reverse = True)[parent_highest_hisp_index] - sorted(hisp_effective_parent, reverse = True)[parent_highest_hisp_index]))
+#    highest_max_bound =  np.exp(10*(sorted(max_effective, reverse = True)[parent_highest_max_index] - sorted(max_effective_parent, reverse = True)[parent_highest_max_index]))
+#    
+#    bound = HO_sum11_bound if bound_type == 'HO_sum11_bound' else \
+#    HO_11th_bound if bound_type == 'HO_11th_bound' else \
+#    maxHB_sum15_bound if bound_type == 'maxHB_sum15_bound' else\
+#    maxHB_15th_bound if bound_type == 'maxHB_15th_bound' else\
+#    highest_hisp_bound if bound_type == 'highest_hisp_bound' else\
+#    highest_max_bound if bound_type == 'highest_max_bound' else good_bound
+    
+    return random.random() < bound
+
+     
+
+    
 #define chain
 chain = MarkovChain(
     proposal = proposal,
@@ -647,7 +709,8 @@ chain = MarkovChain(
             if ensemble_inclusion else [constraints.within_percent_of_ideal_population(initial_partition, pop_tol)],
     accept = accept if run_type == 'free' else \
             hill_accept_bound if run_type == 'hill_climb' \
-            else sim_anneal_accept,
+            else sim_anneal_accept if run_type == 'sim_anneal' \
+            else vra_opt_accept,
     initial_state = initial_partition,
     total_steps = total_steps
 )
@@ -674,22 +737,28 @@ pres12_df = pd.DataFrame(columns = range(num_districts), index = list(range(stor
 sen18_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 centroids_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 
-#target districts
-target_districts = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+map_metric = pd.DataFrame(columns = ["HO", "BO", "Distinct"], index = list(range(store_interval)))
+#effective precincts 
+effect_precincts = pd.DataFrame(columns = ["BO", "HO", "Either"], index = store_plans["Index"])
+effect_precincts = effect_precincts.fillna(0)
 
 count_moves = 0
 step_Num = 0
 best_score = 0
-start_time_total = time.time()
+best_hisp = 0
+best_black = 0  
+best_distinct = 0  
+last_step_stored = 0
+black_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'BCVAP')), 'Cutoff'].values[0]
+hisp_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'HCVAP')), 'Cutoff'].values[0]
 #run chain and collect data
+start_time_total = time.time()
 for step in chain:
     print("step", step_Num)
     final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-    total_hisp_final, total_black_final, total_distinct = step["final_elec_model"]
-    print("hisp dists", total_hisp_final)
-    print("black dists", total_black_final)
-    print("total distinct", total_distinct)
-    print("inclusion?", inclusion(step))
+    total_hisp_final, total_black_final, total_distinct, optimize_dict = step["final_elec_model"]
+    map_metric.loc[step_Num] = [total_hisp_final, total_black_final, total_distinct]
+
     #saving at intervals
     if step_Num % store_interval == 0 and step_Num > 0:
         store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
@@ -710,10 +779,7 @@ for step in chain:
             black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
             white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), index = False)
             white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-            
-            target_districts.to_csv(DIR + "outputs/target_districts_{}.csv".format(run_name), index = False)
-            target_districts = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-            
+                 
             final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
             last_state_prob_dict = dict(zip(final_state_prob_df.columns, final_state_prob_df.loc[step_Num - 1]))
             final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
@@ -745,10 +811,7 @@ for step in chain:
             black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
             white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
             white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-            
-            target_districts.to_csv(DIR + "outputs/target_districts_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-            target_districts = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-            
+                    
             last_state_prob_dict = dict(zip(final_state_prob_df.columns, final_state_prob_df.loc[(step_Num - 1) % store_interval]))
             final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
             final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
@@ -830,9 +893,78 @@ for step in chain:
 
         final_dist_prob_df.loc[step_Num % store_interval] = final_dist_prob_df.loc[(step_Num % store_interval) -1]
         for i in final_dist_prob_dict.keys():
-            final_dist_prob_df.at[step_Num % store_interval, i] = final_dist_prob_dict[i]
+            final_dist_prob_df.at[step_Num % store_interval, i] = final_dist_prob_dict[i] 
 
-    #step by step plot
+    #store precincts that were in effective districts in this step
+    step_distributions = final_state_prob_df.loc[step_Num % store_interval]  if model_mode == 'statewide' else \
+            final_equal_prob_df.loc[step_Num % store_interval] if model_mode == 'equal' else \
+            final_dist_prob_df.loc[step_Num % store_interval]
+    step_dict = dict(zip((list(range(num_districts))), step_distributions))
+    
+    hisp_effective = [i+l for i,j,k,l in step_dict.values()]
+    black_effective = [j+l for i,j,k,l in step_dict.values()]
+    
+    hisp_effect_index = [i for i,n in enumerate(hisp_effective) if n >= hisp_threshold]
+    black_effect_index = [i for i,n in enumerate(black_effective) if n >= black_threshold]
+    either_effect_index = [i for i in range(num_districts) if i in hisp_effect_index or i in black_effect_index]
+    
+    hisp_precincts = [prec for prec in step.assignment.keys() if step.assignment[prec] in hisp_effect_index]
+    black_precincts = [prec for prec in step.assignment.keys() if step.assignment[prec] in black_effect_index]
+    either_precincts = [prec for prec in step.assignment.keys() if step.assignment[prec] in either_effect_index]
+              
+    effect_precincts.loc[effect_precincts.index.isin(hisp_precincts), "HO"] = effect_precincts.loc[effect_precincts.index.isin(hisp_precincts), "HO"]+1
+    effect_precincts.loc[effect_precincts.index.isin(black_precincts), "BO"] = effect_precincts.loc[effect_precincts.index.isin(black_precincts), "BO"]+1
+    effect_precincts.loc[effect_precincts.index.isin(either_precincts), "Either"] = effect_precincts.loc[effect_precincts.index.isin(either_precincts), "Either"]+1
+    
+    #store plans     
+    if (total_hisp_final > best_hisp or total_black_final > best_black or total_distinct > best_distinct) or \
+        (inclusion(step) and (step_Num - last_step_stored) > 100) or step_Num>= 0 or\
+        (inclusion(step) and len([i for i,n in enumerate(hisp_effective) if n >= .55])>9 and (step_Num - last_step_stored) > 100): 
+        last_step_stored = step_Num
+        store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
+        print("store new one!")
+        if total_hisp_final > best_hisp:
+            print("gain hisp", total_hisp_final, best_hisp, "step", step_Num)
+            best_hisp = total_hisp_final
+        if total_black_final > best_black:
+           best_black = total_black_final
+        if total_distinct > best_distinct:
+           best_distinct = total_distinct
+
+    step_Num += 1
+
+#output data
+store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
+#store district-by-district data
+#demo data
+hisp_prop_df.to_csv(DIR + "outputs/hisp_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+black_prop_df.to_csv(DIR + "outputs/black_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+#partisan data
+pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
+pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
+sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
+centroids_df.to_csv(DIR + "outputs/centroids_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
+
+effect_precincts.to_csv(DIR + "outputs/effect_precincts_{}.csv".format(run_name), index = True)
+map_metric.to_csv(DIR + "outputs/map_metric_{}.csv".format(run_name), index = True)
+#vra data
+if total_steps < store_interval:
+    final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
+    final_equal_prob_df.to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name),  index= False)
+    final_dist_prob_df.to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), index= False)
+else:  
+    final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+    final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+    final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+############# final print outs
+print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
+print("total moves", count_moves)
+print("run name:", run_name)
+print("num steps", total_steps)
+print("current step", step_Num)
+
+#put in chain steps to get step by step plot
 #    final_prob =  dict(zip(list(final_state_prob_df.columns), list(final_state_prob_df.loc[step_Num])))
 #    state_gdf["Map{}".format(step_Num)] = state_gdf.index.map(step.assignment.to_dict())          
 #    dissolved_map = state_gdf.copy().dissolve(by = "Map{}".format(step_Num), aggfunc = sum)
@@ -850,46 +982,3 @@ for step in chain:
 #    dissolved_map.plot(column = 'Latino Effective', edgecolor = 'black')
 #    plt.axis("off")
 #    plt.savefig("TX_latino_map{}.png".format(step_Num), bbox_inches = 'tight')
-    
-
-    #store plans        
-    if (step["vra_score"] > best_score and run_type != 'free') or step_Num == 0 or ensemble_inclusion:   
-        store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
-        best_score = step["vra_score"]
-
-    if time.time() - start_time_total> hour_cap*3600:
-        print("time up!", time.time() - start_time_total)
-        break
-    step_Num += 1
-
-#output data
-store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
-#store district-by-district data
-#demo data
-hisp_prop_df.to_csv(DIR + "outputs/hisp_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-black_prop_df.to_csv(DIR + "outputs/black_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-#partisan data
-pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-centroids_df.to_csv(DIR + "outputs/centroids_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-target_districts.to_csv(DIR + "outputs/target_districts_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-
-#vra data
-if total_steps < store_interval:
-    final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
-    final_equal_prob_df.to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name),  index= False)
-    final_dist_prob_df.to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), index= False)
-else:  
-    final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-    final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-    final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-############# final print outs
-print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
-print("total moves", count_moves)
-print("run name:", run_name)
-print("num steps", total_steps)
-print("current step", step_Num)
-
-

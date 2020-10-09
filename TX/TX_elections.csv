@@ -1,15 +1,15 @@
 Election,Type,Year,Election Set
 12G_President,General,2012,12President
-12G_U.S. Sen,General,2012,12U.S. Sen
-12P_U.S. Sen,Primary,2012,12U.S. Sen
-12R_U.S. Sen,Runoff,2012,12U.S. Sen
-14G_Ag Comm,General,2014,14Ag Comm
+12G_US_Sen,General,2012,12US_Sen
+12P_US_Sen,Primary,2012,12US_Sen
+12R_US_Sen,Runoff,2012,12US_Sen
+14G_Ag_Comm,General,2014,14Ag_Comm
 14G_Attorney Gen,General,2014,14Attorney Gen
 14G_Comptroller,General,2014,14Comptroller
 14G_Governor,General,2014,14Governor
 14G_Land Comm,General,2014,14Land Comm
 14G_Lt. Governor,General,2014,14Lt. Governor
-14G_U.S. Sen,General,2014,14U.S. Sen
+14G_US_Sen,General,2014,14U.S. Sen
 14P_Ag Comm,Primary,2014,14Ag Comm
 14P_Governor,Primary,2014,14Governor
 14P_U.S. Sen,Primary,2014,14U.S. Sen
