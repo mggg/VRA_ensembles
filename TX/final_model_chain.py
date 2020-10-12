@@ -52,8 +52,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from run_functions import f, norm_dist_params, ER_run, preferred_cand, \
-     compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_all, cand_pref_all_alt_qv
+from run_functions import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_all, cand_pref_all_alt_qv
 from ast import literal_eval
 #############################################################################################################
 #DATA PREP AND INPUTS:
@@ -76,8 +75,8 @@ pop_tol = .01 #U.S. Cong
 assignment1= 'CD' #CD, sldl358, sldu172, sldl309
 run_name = 'opt_test_10_6' #sys.argv[1]
 run_type = 'vra_opt_accept' #sys.argv[3] #(free, hill_climb, sim_anneal, vra_
-model_mode = 'statewide' #sys.argv[2] #'district', equal, statewide
-start_map = 'Seed1' #sys.argv[5] #'enacted' or random
+model_mode = 'equal' #sys.argv[2] #'district', equal, statewide
+start_map = 'Seed1_reset' #sys.argv[5] #'enacted' or random
 #additional parameters for opimization runs:
 #need if running hillclimb with bound
 bound = .1 #float(sys.argv[6]) 
@@ -119,7 +118,7 @@ model_cutoffs = pd.read_csv("cutoffs.csv")
 prec_ei_df = pd.read_csv("prec_count_quants.csv", dtype = {'CNTYVTD':'str'})
 mean_prec_counts = pd.read_csv("mean_prec_vote_counts.csv", dtype = {'CNTYVTD':'str'})
 logit_params = pd.read_csv("align_adj_noPop_logit_params.csv")
-equal_seed_plans = pd.read_csv("seed_plans_equal.csv") 
+equal_seed_plans = pd.read_csv("seed_plans_equal_more.csv") 
 state_seed_plans = pd.read_csv("seed_plans_state.csv") 
 dist_seed_plans = pd.read_csv("seed_plans_dist.csv") 
 
@@ -653,8 +652,8 @@ def vra_opt_accept(partition):
     black_effective = [j+l for i,j,k,l in optimize_dict.values()]        
     hisp_effective_parent = [i+l for i,j,k,l in optimize_dict_parent.values()]
     black_effective_parent = [j+l for i,j,k,l in optimize_dict_parent.values()] 
-    max_effective = [max(i,j) for i,j in zip(hisp_effective, black_effective)]
-    max_effective_parent = [max(i,j) for i,j in zip(hisp_effective_parent, black_effective_parent)]
+#    max_effective = [max(i,j) for i,j in zip(hisp_effective, black_effective)]
+#    max_effective_parent = [max(i,j) for i,j in zip(hisp_effective_parent, black_effective_parent)]
         
     hisp_district_scores = [district_score(k) for k in hisp_effective]
     hisp_map_score = sum(hisp_district_scores)
