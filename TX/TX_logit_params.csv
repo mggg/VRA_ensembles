@@ -1,0 +1,10 @@
+subgroup,model_type,coef,intercept
+Black,district,11.15783085,-2.35270067
+Latino,district,9.769883611,-2.69868447
+Neither,district,6.940389179,-2.6794117
+Black,equal,11.41821755,-2.17585215
+Latino,equal,10.42857448,-2.42915317
+Neither,equal,7.482199387,-3.91864306
+Black,statewide,11.42063391,-2.04771669
+Latino,statewide,10.40080494,-2.45165631
+Neither,statewide,7.577712026,-3.71888853
