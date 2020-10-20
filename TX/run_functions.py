@@ -158,7 +158,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     final_black_prob = [black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     final_hisp_prob = [hisp_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
     
-    #when fitting logit
+    #when fitting logit, comment in:
 #    final_neither = neither_vra_prob
 #    final_overlap = ["N/A"]*len(dist_changes)
 #    final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
@@ -231,3 +231,27 @@ def cand_pref_all_alt_qv(prec_quant_df, dist_prec_list, bases, outcomes, sample_
         list(map(np.random.shuffle, vec_rand_shift.T))
         draws[base] = vec_rand_shift.sum(axis=1) 
     return {outcome:{base.split('.')[1].split('_counts')[0]:sum([1 if draws[base][i]==max([draws[base_][i] for base_ in outcomes[outcome]]) else 0 for i in range(sample_size)])/sample_size for base in outcomes[outcome]} for outcome in outcomes.keys()}
+
+def cand_pref_all_draws_outcomes(prec_quant_df, precs, bases, outcomes, sample_size = 1000 ):
+    quant_vals = np.array([0,125,250,375,500,625,750,875,1000])
+    draws = {}
+    for outcome in outcomes.keys():
+        draw_base_list = []
+        for base in outcomes[outcome]:
+            dist_prec_quant = prec_quant_df.copy()
+            vec_rand = np.random.rand(sample_size,len(dist_prec_quant))
+            vec_rand_shift = np.array(dist_prec_quant[base +'.'+ '0'])+ sum(np.minimum(np.maximum(vec_rand-quant_vals[qv]/1000,0),.125)*8*np.array(dist_prec_quant[base + '.' +  str(quant_vals[qv+1])]-dist_prec_quant[base + '.'+ str(quant_vals[qv])]) for qv in range(len(quant_vals)-1))
+            draw_base_list.append(vec_rand_shift.astype('float32').T)
+        draws[outcome] = np.transpose(np.stack(draw_base_list),(1,0,2))
+    return draws
+
+def cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes):
+    dist_draws = {}
+    for outcome in outcomes:
+        summed_outcome = prec_draws_outcomes[outcome][dist_prec_indices].sum(axis=0)
+        unique, counts = np.unique(np.argmax(summed_outcome, axis=0), return_counts=True)
+        prefs = {x.split('.')[1].split('_counts')[0]:0.0 for x in outcomes[outcome]}
+        prefs_counts = dict(zip(unique, counts))
+        prefs.update({outcomes[outcome][key].split('.')[1].split('_counts')[0]: prefs_counts[key]/len(summed_outcome[0]) for key in prefs_counts.keys()})
+        dist_draws[outcome] = prefs
+    return dist_draws
