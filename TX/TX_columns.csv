@@ -4,14 +4,14 @@ ObamaD_12G_President
 JohnsonL_12G_President
 SteinG_12G_President
 Write-In _12G_President
-CruzR_12G_U.S. Sen
-SadlerD_12G_U.S. Sen
-MyersL_12G_U.S. Sen
-CollinsG_12G_U.S. Sen
-AllenD_12P_U.S. Sen
-HubbardD_12P_U.S. Sen
-SadlerD_12P_U.S. Sen
-YarbroughD_12P_U.S. Sen
+CruzR_12G_US_Sen
+SadlerD_12G_US_Sen
+MyersL_12G_US_Sen
+CollinsG_12G_US_Sen
+AllenD_12P_US_Sen
+HubbardD_12P_US_Sen
+SadlerD_12P_US_Sen
+YarbroughD_12P_US_Sen
 BachmannR_12P_President
 DavisR_12P_President
 GingrichR_12P_President
@@ -21,23 +21,23 @@ RoemerR_12P_President
 RomneyR_12P_President
 SantorumR_12P_President
 UncommittedR_12P_President
-AddisonR_12P_U.S. Sen
-AgrisR_12P_U.S. Sen
-CleaverR_12P_U.S. Sen
-CruzR_12P_U.S. Sen
-DewhurstR_12P_U.S. Sen
-GambiniR_12P_U.S. Sen
-JamesR_12P_U.S. Sen
-LeppertR_12P_U.S. Sen
-PittengerR_12P_U.S. Sen
-SadlerD_12R_U.S. Sen
-YarbroughD_12R_U.S. Sen
-CruzR_12R_U.S. Sen
-DewhurstR_12R_U.S. Sen
-MillerR_14G_Ag Comm
-HoganD_14G_Ag Comm
-PalmquistL_14G_Ag Comm
-KendrickG_14G_Ag Comm
+AddisonR_12P_US_Sen
+AgrisR_12P_US_Sen
+CleaverR_12P_US_Sen
+CruzR_12P_US_Sen
+DewhurstR_12P_US_Sen
+GambiniR_12P_US_Sen
+JamesR_12P_US_Sen
+LeppertR_12P_US_Sen
+PittengerR_12P_US_Sen
+SadlerD_12R_US_Sen
+YarbroughD_12R_US_Sen
+CruzR_12R_US_Sen
+DewhurstR_12R_US_Sen
+MillerR_14G_Ag_Comm
+HoganD_14G_Ag_Comm
+PalmquistL_14G_Ag_Comm
+KendrickG_14G_Ag_Comm
 PaxtonR_14G_Attorney Gen
 HoustonD_14G_Attorney Gen
 BalagiaL_14G_Attorney Gen
@@ -51,38 +51,38 @@ DavisD_14G_Governor
 GlassL_14G_Governor
 ParmerG_14G_Governor
 PavittW_14G_Governor
-BushR_14G_Land Comm
-CookD_14G_Land Comm
-KnightL_14G_Land Comm
-AlessiG_14G_Land Comm
-PatrickR_14G_Lt. Governor
-Van De PutteD_14G_Lt. Governor
-ButlerL_14G_Lt. Governor
-CourtneyG_14G_Lt. Governor
-CornynR_14G_U.S. Sen
-AlameelD_14G_U.S. Sen
-PaddockL_14G_U.S. Sen
-SanchezG_14G_U.S. Sen
-TahiroW_14G_U.S. Sen
-FitzsimonsD_14P_Ag Comm
-HoganD_14P_Ag Comm
-FriedmanD_14P_Ag Comm
+BushR_14G_Land_Comm
+CookD_14G_Land_Comm
+KnightL_14G_Land_Comm
+AlessiG_14G_Land_Comm
+PatrickR_14G_Lt_Governor
+Van De PutteD_14G_Lt_Governor
+ButlerL_14G_Lt_Governor
+CourtneyG_14G_Lt_Governor
+CornynR_14G_US_Sen
+AlameelD_14G_US_Sen
+PaddockL_14G_US_Sen
+SanchezG_14G_US_Sen
+TahiroW_14G_US_Sen
+FitzsimonsD_14P_Ag_Comm
+HoganD_14P_Ag_Comm
+FriedmanD_14P_Ag_Comm
 HoustonD_14P_Attorney Gen
 CollierD_14P_Comptroller
 MadrigalD_14P_Governor
 DavisD_14P_Governor
-CookD_14P_Land Comm
-Van De PutteD_14P_Lt. Governor
-AlameelD_14P_U.S. Sen
-KimD_14P_U.S. Sen
-RogersD_14P_U.S. Sen
-ScherrD_14P_U.S. Sen
-FjetlandD_14P_U.S. Sen
-OpielaR_14P_Ag Comm
-CarnesR_14P_Ag Comm
-CottenR_14P_Ag Comm
-MillerR_14P_Ag Comm
-MerrittR_14P_Ag Comm
+CookD_14P_Land_Comm
+Van De PutteD_14P_Lt_Governor
+AlameelD_14P_US_Sen
+KimD_14P_US_Sen
+RogersD_14P_US_Sen
+ScherrD_14P_US_Sen
+FjetlandD_14P_US_Sen
+OpielaR_14P_Ag_Comm
+CarnesR_14P_Ag_Comm
+CottenR_14P_Ag_Comm
+MillerR_14P_Ag_Comm
+MerrittR_14P_Ag_Comm
 SmithermanR_14P_Attorney Gen
 BranchR_14P_Attorney Gen
 PaxtonR_14P_Attorney Gen
@@ -94,30 +94,30 @@ AbbottR_14P_Governor
 FritschR_14P_Governor
 MartinezR_14P_Governor
 KilgoreR_14P_Governor
-WattsR_14P_Land Comm
-BushR_14P_Land Comm
-PatrickR_14P_Lt. Governor
-DewhurstR_14P_Lt. Governor
-PattersonR_14P_Lt. Governor
-StaplesR_14P_Lt. Governor
-MappR_14P_U.S. Sen
-CleaverR_14P_U.S. Sen
-StovallR_14P_U.S. Sen
-CornynR_14P_U.S. Sen
-CopeR_14P_U.S. Sen
-VegaR_14P_U.S. Sen
-ReasorR_14P_U.S. Sen
-StockmanR_14P_U.S. Sen
-FriedmanD_14R_Ag Comm
-HoganD_14R_Ag Comm
-AlameelD_14R_U.S. Sen
-RogersD_14R_U.S. Sen
-MerrittR_14R_Ag Comm
-MillerR_14R_Ag Comm
+WattsR_14P_Land_Comm
+BushR_14P_Land_Comm
+PatrickR_14P_Lt_Governor
+DewhurstR_14P_Lt_Governor
+PattersonR_14P_Lt_Governor
+StaplesR_14P_Lt_Governor
+MappR_14P_US_Sen
+CleaverR_14P_US_Sen
+StovallR_14P_US_Sen
+CornynR_14P_US_Sen
+CopeR_14P_US_Sen
+VegaR_14P_US_Sen
+ReasorR_14P_US_Sen
+StockmanR_14P_US_Sen
+FriedmanD_14R_Ag_Comm
+HoganD_14R_Ag_Comm
+AlameelD_14R_US_Sen
+RogersD_14R_US_Sen
+MerrittR_14R_Ag_Comm
+MillerR_14R_Ag_Comm
 BranchR_14R_Attorney Gen
 PaxtonR_14R_Attorney Gen
-DewhurstR_14R_Lt. Governor
-PatrickR_14R_Lt. Governor
+DewhurstR_14R_Lt_Governor
+PatrickR_14R_Lt_Governor
 ClintonD_16G_President
 TrumpR_16G_President
 JohnsonL_16G_President
@@ -145,9 +145,9 @@ HuckabeeR_16P_President
 CruzR_16P_President
 GrayR_16P_President
 UncommittedR_16P_President
-MillerR_18G_Ag Comm
-OlsonD_18G_Ag Comm
-CarpenterL_18G_Ag Comm
+MillerR_18G_Ag_Comm
+OlsonD_18G_Ag_Comm
+CarpenterL_18G_Ag_Comm
 PaxtonR_18G_Attorney Gen
 NelsonD_18G_Attorney Gen
 HarrisL_18G_Attorney Gen
@@ -157,16 +157,16 @@ SandersL_18G_Comptroller
 AbbottR_18G_Governor
 ValdezD_18G_Governor
 TippettsL_18G_Governor
-BushR_18G_Land Comm
-SuazoD_18G_Land Comm
-PinaL_18G_Land Comm
-PatrickR_18G_Lt. Governor
-CollierD_18G_Lt. Governor
-McKennonL_18G_Lt. Governor
-CruzR_18G_U.S. Sen
-ORourkeD_18G_U.S. Sen
-DikemanL_18G_U.S. Sen
-OlsonD_18P_Ag Comm
+BushR_18G_Land_Comm
+SuazoD_18G_Land_Comm
+PinaL_18G_Land_Comm
+PatrickR_18G_Lt_Governor
+CollierD_18G_Lt_Governor
+McKennonL_18G_Lt_Governor
+CruzR_18G_US_Sen
+ORourkeD_18G_US_Sen
+DikemanL_18G_US_Sen
+OlsonD_18P_Ag_Comm
 NelsonD_18P_Attorney Gen
 MahoneyD_18P_Comptroller
 ChevalierD_18P_Comptroller
@@ -179,52 +179,52 @@ OceguedaD_18P_Governor
 ValdezD_18P_Governor
 WhiteD_18P_Governor
 MumbachD_18P_Governor
-SuazoD_18P_Land Comm
-MorganD_18P_Land Comm
-CooperD_18P_Lt. Governor
-CollierD_18P_Lt. Governor
-KimbroughD_18P_U.S. Sen
-HernandezD_18P_U.S. Sen
-ORourkeD_18P_U.S. Sen
-HoganR_18P_Ag Comm
-BlockerR_18P_Ag Comm
-MillerR_18P_Ag Comm
+SuazoD_18P_Land_Comm
+MorganD_18P_Land_Comm
+CooperD_18P_Lt_Governor
+CollierD_18P_Lt_Governor
+KimbroughD_18P_US_Sen
+HernandezD_18P_US_Sen
+ORourkeD_18P_US_Sen
+HoganR_18P_Ag_Comm
+BlockerR_18P_Ag_Comm
+MillerR_18P_Ag_Comm
 PaxtonR_18P_Attorney Gen
 HegarR_18P_Comptroller
 KruegerR_18P_Governor
 KilgoreR_18P_Governor
 AbbottR_18P_Governor
-EdwardsR_18P_Land Comm
-PattersonR_18P_Land Comm
-BushR_18P_Land Comm
-RangeR_18P_Land Comm
-PatrickR_18P_Lt. Governor
-MilderR_18P_Lt. Governor
-JacobsonR_18P_U.S. Sen
-MillerR_18P_U.S. Sen
-CruzR_18P_U.S. Sen
-de StefanoR_18P_U.S. Sen
-SamR_18P_U.S. Sen
+EdwardsR_18P_Land_Comm
+PattersonR_18P_Land_Comm
+BushR_18P_Land_Comm
+RangeR_18P_Land_Comm
+PatrickR_18P_Lt_Governor
+MilderR_18P_Lt_Governor
+JacobsonR_18P_US_Sen
+MillerR_18P_US_Sen
+CruzR_18P_US_Sen
+de StefanoR_18P_US_Sen
+SamR_18P_US_Sen
 ValdezD_18R_Governor
 WhiteD_18R_Governor
-CraddickR_18G_RR Comm 1
-McAllenD_18G_RR Comm 1
-McAllenD_18P_RR Comm 1
-SpellmonD_18P_RR Comm 1
-YarbroughD_16G_RR Comm 1
-ChristianR_16G_RR Comm 1
-GarrettD_16R_RR Comm 1
-YarbroughD_16R_RR Comm 1
-GarrettD_16P_RR Comm 1
-YarbroughD_16P_RR Comm 1
-BurnamD_16P_RR Comm 1
-SittonR_14G_RR Comm 3
-BrownD_14G_RR Comm 3
-HenryD_14P_RR Comm 3
-BrownD_14P_RR Comm 3
-CraddickR_12G_RR Comm 1
-HenryD_12G_RR Comm 1
-HenryD_12P_RR Comm 1
+CraddickR_18G_RR_Comm_1
+McAllenD_18G_RR_Comm_1
+McAllenD_18P_RR_Comm_1
+SpellmonD_18P_RR_Comm_1
+YarbroughD_16G_RR_Comm_1
+ChristianR_16G_RR_Comm_1
+GarrettD_16R_RR_Comm_1
+YarbroughD_16R_RR_Comm_1
+GarrettD_16P_RR_Comm_1
+YarbroughD_16P_RR_Comm_1
+BurnamD_16P_RR_Comm_1
+SittonR_14G_RR_Comm_3
+BrownD_14G_RR_Comm_3
+HenryD_14P_RR_Comm_3
+BrownD_14P_RR_Comm_3
+CraddickR_12G_RR_Comm_1
+HenryD_12G_RR_Comm_1
+HenryD_12P_RR_Comm_1
 SmithermanR_12G_RR Comm 2
 ElyD_12P_President
 WolfeD_12P_President

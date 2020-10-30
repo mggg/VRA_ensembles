@@ -71,8 +71,8 @@ C_Y = "C_Y"
 
 #run parameters
 custom_map = True
-map_num = 2264
-run_file = 'burst_bound4_100_dist'
+map_num = 7883
+run_file = 'burst_bound4_50_dist'
 start_time_total = time.time()
 pop_tol = .01 #U.S. Cong
 assignment1= 'CD' if custom_map == False else 'Map{}'.format(map_num) #CD, sldl358, sldu172, sldl309
@@ -83,7 +83,7 @@ cand_drop_thresh = 0
 
 plot_path = 'tx-results-cvap-sl-adjoined/tx-results-cvap-sl-adjoined.shp'  #for shapefile
 DIR = ''
-
+    
 #read files
 elec_data = pd.read_csv("TX_elections.csv")
 TX_columns = list(pd.read_csv("TX_columns.csv")["Columns"])
@@ -141,7 +141,7 @@ for elec_set in elec_sets:
     elec_set_dict[elec_set] = dict(zip(elec_set_df.Type, elec_set_df.Election))
 elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Election Set"]))
 
-#initialize state_gdf
+#initialxize state_gdf
 #reformat/re-index enacted map plans
 state_gdf = gpd.read_file(plot_path)
 state_gdf["CD"] = state_gdf["CD"].astype('int')
@@ -447,7 +447,8 @@ neither_weight_dist["Election Set"] = elec_sets
 #district probability distribution: state
 final_state_prob_dict, black_pref_wins_state, hisp_pref_wins_state, neither_pref_wins_state,\
              black_points_accrued_state, hisp_points_accrued_state, \
-             neither_points_accrued_state, primary_second_df_state \
+             neither_points_accrued_state, primary_second_df_state, prim_share_hpc_state, \
+             prim_share_bpc_state, party_gen_win\
              = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
              hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_state, \
              black_weight_state, hisp_weight_state, dist_elec_results, range(num_districts),
@@ -457,7 +458,8 @@ final_state_prob_dict, black_pref_wins_state, hisp_pref_wins_state, neither_pref
 #district probability distribution: equal
 final_equal_prob_dict, black_pref_wins_equal, hisp_pref_wins_equal, neither_pref_wins_equal,\
          black_points_accrued_equal, hisp_points_accrued_equal, \
-         neither_points_accrued_equal, primary_second_df_equal \
+         neither_points_accrued_equal, primary_second_df_equal, prim_share_hpc_equal, \
+         prim_share_bpc_equal, party_gen_win,\
          = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
          hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_equal, \
          black_weight_equal, hisp_weight_equal, dist_elec_results, range(num_districts),
@@ -467,7 +469,8 @@ final_equal_prob_dict, black_pref_wins_equal, hisp_pref_wins_equal, neither_pref
 #district probability distribution: district
 final_dist_prob_dict, black_pref_wins_dist, hisp_pref_wins_dist, neither_pref_wins_dist,\
          black_points_accrued_dist, hisp_points_accrued_dist, \
-         neither_points_accrued_dist, primary_second_df_dist\
+         neither_points_accrued_dist, primary_second_df_dist, prim_share_hpc_dist, \
+         prim_share_bpc_dist, party_gen_win,\
          = compute_final_dist(map_winners, black_pref_cands_prim_dist, black_pref_cands_runoffs_dist,\
          hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
          black_weight_dist, hisp_weight_dist, dist_elec_results, range(num_districts),
@@ -535,9 +538,10 @@ for model_mode in model_modes:
     vra_districts_black = list(district_effect[district_effect["Black Effective {}".format(model_mode)] + district_effect["Overlap Effective {}".format(model_mode)] > .6]["District"])
     
     dist_tests = set(vra_districts_hisp + vra_districts_black)
-#    if model_mode == 'district':
-#        dist_tests.add(22)
-    writer = pd.ExcelWriter(DIR + 'outputs/{}_{}_vra_districts_Map{}.xlsx'.format(run_file,model_mode, map_num), engine = 'xlsxwriter')
+    dist_tests.add(17)
+    dist_tests.add(35)
+    dist_summary_wins = pd.DataFrame(columns = ["district" ,"Black prim total", "hisp prim total", "gen win total"])
+    writer = pd.ExcelWriter(DIR + 'outputs/{}_{}_vra_districts_Maps{}.xlsx'.format(run_file,model_mode, map_num), engine = 'xlsxwriter')
     for dist in dist_tests:
         primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
         runoff_winners = map_winners[map_winners["Election Type"] == 'Runoff'].reset_index(drop = True)
@@ -569,6 +573,11 @@ for model_mode in model_modes:
         
         primary_second_df = primary_second_df_dist if model_mode == 'district' else primary_second_df_state if model_mode == 'statewide' \
                             else primary_second_df_equal
+        
+        prim_share_hpc_df = prim_share_hpc_dist if model_mode == 'district' else prim_share_hpc_state if model_mode == 'statewide'\
+                            else prim_share_hpc_equal
+        prim_share_bpc_df = prim_share_bpc_dist if model_mode == 'district' else prim_share_bpc_state if model_mode == 'statewide'\
+                            else prim_share_bpc_equal
                             
         black_points_accrued = black_points_accrued_dist if model_mode == 'district' else black_points_accrued_state if model_mode == 'statewide' \
                             else black_points_accrued_equal
@@ -589,6 +598,9 @@ for model_mode in model_modes:
         district_df["General Winner"] = district_df["Election Set"].map(dict(zip(general_winners["Election Set"], general_winners[district])))
         district_df["Black pref cand (primary)"] = district_df["Election Set"].map(dict(zip(black_pref_cands_prim["Election Set"], black_pref_cands_prim[district])))
         district_df["Hisp pref cand (primary)"] = district_df["Election Set"].map(dict(zip(hisp_pref_cands_prim["Election Set"], hisp_pref_cands_prim[district])))
+        district_df["HPC share prim"] = district_df["Election Set"].map(dict(zip(prim_share_hpc_df["Election Set"], prim_share_hpc_df[district])))
+        district_df["BPC share prim"] = district_df["Election Set"].map(dict(zip(prim_share_bpc_df["Election Set"], prim_share_bpc_df[district])))
+        
         district_df["Black pref cand (runoff)"] = district_df["Election Set"].map(dict(zip(black_pref_cands_runoffs["Election Set"], black_pref_cands_runoffs[district])))
         district_df["Hisp pref cand (runoff)"] = district_df["Election Set"].map(dict(zip(hisp_pref_cands_runoffs["Election Set"], hisp_pref_cands_runoffs[district])))
         district_df["Black primary cand top 2"] = [(district_df["Black pref cand (primary)"][i] == district_df["Primary Winner"][i])\
@@ -614,11 +626,24 @@ for model_mode in model_modes:
         district_df["Black points accrued"] = district_df["Election Set"].map(dict(zip(black_points_accrued["Election Set"], black_points_accrued[district])))
         district_df["Hisp points accrued"] =  district_df["Election Set"].map(dict(zip(hisp_points_accrued["Election Set"], hisp_points_accrued[district])))
         district_df["Neither points accrued"] =  district_df["Election Set"].map(dict(zip(neither_points_accrued["Election Set"], neither_points_accrued[district])))
+        district_df["Party Gen Winner"] = district_df["Election Set"].map(dict(zip(party_gen_win["Election Set"], party_gen_win[district])))
         district_df["Final Distribution"] = [final_prob[district]] + [None]*(len(district_df) - 1)
+        
+        district_df["Black prim WIN"] = [1 if ((district_df["Black pref cand (primary)"][i] == district_df["Primary Winner"][i] and district_df["Black runoff cand wins"][i] == 'N/A') \
+                   or (district_df["Black primary cand top 2"][i] and district_df["Black pref cand (runoff)"][i] == district_df["Runoff Winner"][i]) \
+                   or (district_df["BPC share prim"][i] > .5)) else 0 for i in range(len(district_df))]
+        district_df["Hisp prim WIN"] = [1 if ((district_df["Hisp pref cand (primary)"][i] == district_df["Primary Winner"][i] and district_df["Hisp runoff cand wins"][i] == 'N/A') \
+                   or (district_df["Hisp primary cand top 2"][i] and district_df["Hisp pref cand (runoff)"][i] == district_df["Runoff Winner"][i]) \
+                   or (district_df["HPC share prim"][i] > .5)) else 0 for i in range(len(district_df))]
+        
+        district_df["Minority Gen win"] = [1 if district_df["Party Gen Winner"][i] == 'D' else 0 for i in range(len(district_df))]
         district_df.to_excel(writer, sheet_name = "District {}".format(dist, model_mode), index = False)
-
+        
+        #fill in summary df
+        dist_summary_wins.loc[len(dist_summary_wins)] = [dist, sum(district_df["Black prim WIN"]), sum(district_df["Hisp prim WIN"]), sum(district_df["Minority Gen win"])]
+    dist_summary_wins.to_csv(DIR + "outputs/Effect_dist_summaries_{}.csv".format(model_mode))
     writer.save()
-    
+
 #check against run output
 final_dist_prob_run = dict(zip(final_dist_prob.columns,final_dist_prob.loc[map_num]))
 final_dist_prob_run = {d: eval(final_dist_prob_run[d]) for d in final_dist_prob_run.keys()}

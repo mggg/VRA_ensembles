@@ -33,7 +33,7 @@ import operator
 DIR = ''
 
 def prob_conf_conversion(cand_prob):
-    #parameters chosen to be 0-ish confidence until 50% then rapid ascenion to high confidence
+    #parameters chosen to be 0-ish confidence until 50% then rapid ascension to high confidence
     cand_conf = 1/(1+np.exp(18-26*cand_prob))    
     return cand_conf
 
@@ -55,6 +55,13 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     
     primary_second_df = pd.DataFrame(columns = range(num_districts))
     primary_second_df["Election Set"] = elec_sets
+    
+    prim_share_hpc = pd.DataFrame(columns = range(num_districts))
+    prim_share_hpc["Election Set"] = elec_sets
+    prim_share_bpc = pd.DataFrame(columns = range(num_districts))
+    prim_share_bpc["Election Set"] = elec_sets
+    party_gen_winner = pd.DataFrame(columns = range(num_districts))
+    party_gen_winner["Election Set"] = elec_sets
     
     primary_races = [elec_set_dict[elec_set]["Primary"] for elec_set in elec_sets]
     runoff_races = [None if 'Runoff' not in elec_set_dict[elec_set].keys() else elec_set_dict[elec_set]["Runoff"] for elec_set in elec_sets]
@@ -87,7 +94,10 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
         black_pref_prim_rank = [primary_ranking[pr][bpc] for pr, bpc in zip(primary_races, black_pref_cands)]
         hisp_pref_prim_rank = [primary_ranking[pr][hpc] for pr, hpc in zip(primary_races, hisp_pref_cands)]
         
+        prim_share_hpc[dist] = [primary_race_share_dict[prim_race][hpc] for prim_race,hpc in zip(primary_races, hisp_pref_cands)]
+        prim_share_bpc[dist] = [primary_race_share_dict[prim_race][bpc] for prim_race,bpc in zip(primary_races, black_pref_cands)]
         party_general_winner = [cand_party_dict[gw] for gw in general_winner_list]
+        party_gen_winner[dist] = party_general_winner
         
         #we always care who preferred candidate is in runoff if the minority preferred primary
         #candidate wins in district primary
@@ -166,7 +176,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     if single_map:
         return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
                 black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
-                neither_points_accrued, primary_second_df
+                neither_points_accrued, primary_second_df, prim_share_hpc, prim_share_bpc, party_gen_winner
     else:
         return dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
     

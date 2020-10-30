@@ -7,36 +7,36 @@ Election,Type,Year,Election Set
 14G_Attorney Gen,General,2014,14Attorney Gen
 14G_Comptroller,General,2014,14Comptroller
 14G_Governor,General,2014,14Governor
-14G_Land Comm,General,2014,14Land Comm
-14G_Lt. Governor,General,2014,14Lt. Governor
-14G_US_Sen,General,2014,14U.S. Sen
-14P_Ag Comm,Primary,2014,14Ag Comm
+14G_Land_Comm,General,2014,14Land_Comm
+14G_Lt_Governor,General,2014,14Lt_Governor
+14G_US_Sen,General,2014,14US_Sen
+14P_Ag_Comm,Primary,2014,14Ag_Comm
 14P_Governor,Primary,2014,14Governor
-14P_U.S. Sen,Primary,2014,14U.S. Sen
-14R_Ag Comm,Runoff,2014,14Ag Comm
-14R_U.S. Sen,Runoff,2014,14U.S. Sen
+14P_US_Sen,Primary,2014,14US_Sen
+14R_Ag_Comm,Runoff,2014,14Ag_Comm
+14R_US_Sen,Runoff,2014,14US_Sen
 16G_President,General,2016,16President
 16P_President,Primary,2016,16President
-18G_Ag Comm,General,2018,18Ag Comm
+18G_Ag_Comm,General,2018,18Ag_Comm
 18G_Attorney Gen,General,2018,18Attorney Gen
 18G_Comptroller,General,2018,18Comptroller
 18G_Governor,General,2018,18Governor
-18G_Land Comm,General,2018,18Land Comm
-18G_Lt. Governor,General,2018,18Lt. Governor
-18G_U.S. Sen,General,2018,18U.S. Sen
+18G_Land_Comm,General,2018,18Land_Comm
+18G_Lt_Governor,General,2018,18Lt_Governor
+18G_US_Sen,General,2018,18US_Sen
 18P_Comptroller,Primary,2018,18Comptroller
 18P_Governor,Primary,2018,18Governor
-18P_Land Comm,Primary,2018,18Land Comm
-18P_Lt. Governor,Primary,2018,18Lt. Governor
-18P_U.S. Sen,Primary,2018,18U.S. Sen
+18P_Land_Comm,Primary,2018,18Land_Comm
+18P_Lt_Governor,Primary,2018,18Lt_Governor
+18P_US_Sen,Primary,2018,18US_Sen
 18R_Governor,Runoff,2018,18Governor
-18G_RR Comm 1,General,2018,18RR Comm 1
-18P_RR Comm 1,Primary,2018,18RR Comm 1
-16G_RR Comm 1,General,2016,16RR Comm 1
-16R_RR Comm 1,Runoff,2016,16RR Comm 1
-16P_RR Comm 1,Primary,2016,16RR Comm 1
-14G_RR Comm 3,General,2014,14RR Comm 3
-14P_RR Comm 3,Primary,2014,14RR Comm 3
-12G_RR Comm 1,General,2012,12RR Comm 1
-12P_RR Comm 1,Primary,2012,12RR Comm 1
+18G_RR_Comm_1,General,2018,18RR_Comm_1
+18P_RR_Comm_1,Primary,2018,18RR_Comm_1
+16G_RR_Comm_1,General,2016,16RR_Comm_1
+16R_RR_Comm_1,Runoff,2016,16RR_Comm_1
+16P_RR_Comm_1,Primary,2016,16RR_Comm_1
+14G_RR_Comm_3,General,2014,14RR_Comm_3
+14P_RR_Comm_3,Primary,2014,14RR_Comm_3
+12G_RR_Comm_1,General,2012,12RR_Comm_1
+12P_RR_Comm_1,Primary,2012,12RR_Comm_1
 12P_President,Primary,2012,12President
