@@ -1,7 +1,0 @@
-﻿model,demog,Cutoff
-district,BCVAP,0.6
-district,HCVAP,0.6
-statewide,BCVAP,0.6
-statewide,HCVAP,0.6
-equal,BCVAP,0.6
-equal,HCVAP,0.6
