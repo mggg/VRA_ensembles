@@ -57,7 +57,7 @@ cand_pref_all_draws_outcomes, cand_pref_all, cand_pref_all_alt_qv
 from ast import literal_eval
 #############################################################################################################
 #DATA PREP AND INPUTS:
-#columns from GeoDF for processing
+#key column names from Texas VTD shapefile
 tot_pop = 'TOTPOP_x'
 white_pop = 'NH_WHITE'
 CVAP = "1_2018"
@@ -70,26 +70,23 @@ C_X = "C_X"
 C_Y = "C_Y"
 
 #user input parameters######################################
-total_steps = 5
-pop_tol = .01 #U.S. Cong
-assignment1= 'CD' #CD, sldl358, sldu172, sldl309
-run_name = 'Texas_run' #sys.argv[1]
+total_steps = 1000
+pop_tol = .01 #U.S. Cong (deviation from ideal district population)
+run_name = 'Texas_neutral_run'
 run_type = 'free' 
-model_mode = 'statewide' #'district', equal, statewide
-start_map = 'Seed1' #'enacted' or a seed
+model_mode = 'statewide' #'district', 'equal', 'statewide'
+start_map = 'CD' #CD, sldl358, sldu172, sldl309 or 'new_seed'
 ensemble_inclusion = False
 ensemble_inclusion_demo = False
-#if vra tilted tun
-bound_type = 'bound2' #for vra tilted run
-beta = 7 #parameter in vra_opt_accept function
+effectiveness_cutoff = .6
 
 #fixed parameters#################################################
 num_districts = 36 #150 state house, 31 senate, 36 Cong
-enacted_black = 4
-enacted_hisp = 8
-enacted_distinct = 11
-plot_path = 'tx-results-cvap-sl-adjoined/tx-results-cvap-sl-adjoined.shp'  #for shapefile
-store_interval = 20  #how many steps until storage
+enacted_black = 4 #number of districts in enacted map with B + Ov > 60%
+enacted_hisp = 8 #number of districts in enacted map with L + Ov > 60%
+enacted_distinct = 11 #number of districts in enacted map with B + Ov > 60% or L + Ov > 60% or both
+plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
+store_interval = 200  #how many Markov chain steps between data storage
 
 DIR = ''
 
@@ -101,14 +98,9 @@ recency_weights = pd.read_csv("recency_weights.csv")
 min_cand_weights = pd.read_csv("min_pref_weight_binary.csv")
 cand_race_table = pd.read_csv("Candidate_Race_Party.csv")
 EI_statewide = pd.read_csv("statewide_rxc_EI_preferences.csv")
-model_cutoffs = pd.read_csv("cutoffs.csv")
 prec_ei_df = pd.read_csv("prec_count_quants.csv", dtype = {'CNTYVTD':'str'})
 mean_prec_counts = pd.read_csv("mean_prec_vote_counts.csv", dtype = {'CNTYVTD':'str'})
 logit_params = pd.read_csv("TX_logit_params.csv")
-equal_seed_plans = pd.read_csv("seed_plans_equal.csv") 
-state_seed_plans = pd.read_csv("seed_plans_state.csv") 
-dist_seed_plans = pd.read_csv("seed_plans_dist.csv") 
-demo_seed_plans = pd.read_csv("seed_plans_demo.csv")
 
 #set up elections data structures
 elections = list(elec_data["Election"]) 
@@ -144,7 +136,6 @@ cand1_index = state_gdf_cols.index('RomneyR_12')
 cand2_index = state_gdf_cols.index('ObamaD_12P')
 state_gdf_cols[cand1_index:cand2_index+1] = TX_columns
 state_gdf.columns = state_gdf_cols
-
 state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
@@ -157,7 +148,6 @@ c_y = centroids.y
 for node in graph.nodes():
     graph.nodes[node]["C_X"] = c_x[node]
     graph.nodes[node]["C_Y"] = c_y[node]
-
 
 #make dictionary that maps an election to its candidates
 #only include 2 major party candidates in generals (assumes here major party candidates are first in candidate list)
@@ -196,13 +186,13 @@ hisp_conf_W3_state["Election Set"] = elec_sets
 neither_conf_W3_state = pd.DataFrame(columns = range(num_districts))
 neither_conf_W3_state["Election Set"] = elec_sets
 
-#pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
+#pre-compute recency_W1 df for all model modes 
 for elec_set in elec_sets:
         elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)
         for dist in range(num_districts):
             recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
    
-# pref cands needed for statewide and equal, weights only needed for state 
+#pre-compute W2 and W3 dfs for statewide/equal modes   
 for elec in primary_elecs + runoff_elecs:
     black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
     hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
@@ -224,8 +214,8 @@ for elec in primary_elecs + runoff_elecs:
 min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = compute_W2(elec_sets, \
               range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, hisp_pref_cands_prim_state, cand_race_dict)
 
-#compute final election weights by taking product of weights 1,2, and 3 for each election set and district
-#Note: because these are statewide weights, and election set will have the same weight across districts
+#compute final election weights by taking product of W1, W2, and W3 for each election set and district
+#Note: because these are statewide weights, an election set will have the same weight across districts
 black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
 black_weight_state["Election Set"] = elec_sets
 hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_state.drop(["Election Set"], axis=1)*hisp_conf_W3_state.drop(["Election Set"], axis=1)    
@@ -233,7 +223,7 @@ hisp_weight_state["Election Set"] = elec_sets
 neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
 neither_weight_state["Election Set"] = elec_sets
 
-#equal weights are all 
+#equal weights are all 1
 black_weight_equal = pd.DataFrame(columns = range(num_districts))
 black_weight_equal[0] = [1]*len(elec_sets)
 hisp_weight_equal = pd.DataFrame(columns = range(num_districts))
@@ -258,42 +248,48 @@ outcomes = {val:[] for val in base_dict.values()}
 for b in bases:
     outcomes[base_dict[b]].append(b) 
     
-#AB add
-precs = list(state_gdf['CNTYVTD'])
+precs = list(state_gdf[geo_id])
 prec_draws_outcomes = cand_pref_all_draws_outcomes(prec_ei_df, precs, bases, outcomes)
 
 ############################################################################################################       
 #UPDATERS FOR CHAIN
-#elections model function. Takes in partition and returns effectiveness distribution per district
-    #and total black effective and Latino-effective districts (>60% effective)
+
+#The elections model function (used as an updater). Takes in partition and returns effectiveness distribution per district
 def final_elec_model(partition):  
-    #only need to run model on two ReCom districts that have changed
+    #Overview#####################################################  
+    #The output of the elections model is a probability distribution for each district:
+    #% Latino, Black, Neither or Overlap effective
+    #To compute these, each election set is first weighted (different for Black and Latino)
+    #by multiplying a recency weight (W1), "in-group"-minority-preference weight (W2) and 
+    #a preferred-candidate-confidence weight (W3).
+    #If the Black (Latino) preferred candidate wins the election (set) a number of points equal to
+    #the set's weight is accrued. The ratio of the accrued points points to the total possible points
+    #is the raw Black (Latino)-effectiviness score for the district. 
+    
+    # After the raw scores are computed, they are adjusted using an "Alignment" score, or a score
+    #the share of votes cast for a minority-preferred candidate by the minority group itself.
+    
+    # Finally, the Black, Latino, Overlap, and Neither distribution (the values sum to 1) 
+    # is computed, by feeding the adjusted effectiveness scores through a logit function,
+    # and interpolating for the final four values.
+    
+    #We need to track several entities in the model, which will be dataframes, whose columns are districts and
+    #rows are election sets (or sometimes individual elections)
+    #These dataframes each store one of the following: Black (latino) preferred candidates (in the
+    #election set's primary), Black (Latino) preferred candidates in runoffs, winners of primary,
+    #runoff and general elections, election winners, weights W1, W2 and W3, Alignment scores
+    #and final election set weight for Black and Latino voters
+    ###########################################################
+    
+    #We only need to run model on two ReCom districts that have changed in each step
     if partition.parent is not None:
         dict1 = dict(partition.parent.assignment)
         dict2 = dict(partition.assignment)
         differences = set([dict1[k] for k in dict1.keys() if dict1[k] != dict2[k]]).union(set([dict2[k] for k in dict2.keys() if dict1[k] != dict2[k]]))
         
-    dist_changes = range(num_districts) if partition.parent is None else differences
-   
-    #The output of the elections model is a probability distribution for each district:
-    #% Latino, Black, Neither or Overlap effetive
-    #To compute these, each election set is first weighted (different for Black and Latino)
-    #by multiplying a recency, minority-preferred and confidence weight.
-    #If the black (Latino) preferred candidate wins the election (set) a number of points equal to
-    #the set's weight is accrued. The ratio of black-accrued points to total possible points
-    #is the raw black (latino) effectiviness for the district. The FINAL black, latino, overlap
-    #and neither are computed from there.
-    #We need to track several entities, which will be dataframes, whose columns are districts and
-    #rows are election sets (or sometimes individual elections)
-    #These dataframes each store one of the following: black (latino) preferred candidates (in the
-    #election set's primary), black (latino) preferred candidate in runoff, winners of primary,
-    #runoff and general elections, recency weights (weight 1), minority-preferred-minority weihgt (weight 2),
-    #confidence weight (weight 3) and final election weight for both black and latino voters
+    dist_changes = range(num_districts) if partition.parent is None else differences  
       
-    #dictionary to store district level vote share results in each election for each candidate
-    #key: election, value: dictionary whose keys are districtss and values are 
-    #another dictionary of % vote share for each cand
-    #for particular elec and district can access all cand results by: dist_elec_results[elec][dist]
+    #dictionary to store district-level candidate vote shares
     dist_elec_results = {}
     order = [x for x in partition.parts]
     for elec in elections:
@@ -315,7 +311,8 @@ def final_elec_model(partition):
     black_pref_cands_prim_dist["Election Set"] = elec_sets
     hisp_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
     hisp_pref_cands_prim_dist["Election Set"] = elec_sets
-    #store runoff preferences for instances where min-pref candidate needs to switch btwn prim and runoff
+    
+    #store runoff preferences for instances where minority-preferred candidate needs to switch between primary and runoff
     black_pref_cands_runoffs_dist = pd.DataFrame(columns = dist_changes)
     black_pref_cands_runoffs_dist["Election Set"] = elec_sets
     hisp_pref_cands_runoffs_dist = pd.DataFrame(columns = dist_changes)
@@ -332,21 +329,17 @@ def final_elec_model(partition):
     hisp_align_prim_dist = pd.DataFrame(columns = dist_changes)
     hisp_align_prim_dist["Election Set"] = elec_sets
     
-    #need to compute alignment score district by district - even in STATEWIDE modes!! (may have diff candidate of choice etc.)
+    #Compute Alignment score district by district - even in statewide/equal modes! (district and statewide preferred candidates can be different)
     black_align_prim_state = pd.DataFrame(columns = range(num_districts))
     black_align_prim_state["Election Set"] = elec_sets
     hisp_align_prim_state = pd.DataFrame(columns = range(num_districts))
     hisp_align_prim_state["Election Set"] = elec_sets
     
-    #to compute district weights, preferred candidate and confidence is computed
-    #for each district at every ReCom step
-    for district in dist_changes: #get vector of precinct values for each district                  
-        #only need preferred candidates and condidence in primary and runoffs
-        #(in Generals we only care if the Democrat wins)
+    #Compute W3 for the district mode and the Alignment score for all modes
+    for district in dist_changes:        
         state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
         dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])
-        #district_support_all = cand_pref_all_alt_qv(prec_ei_df, dist_prec_list, bases, outcomes, sample_size = 1000)        
-        dist_prec_indices = state_gdf.index[state_gdf['CNTYVTD'].isin(dist_prec_list)].tolist()
+        dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
         district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
         
         cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
@@ -389,11 +382,10 @@ def final_elec_model(partition):
     black_align_prim_state =  black_align_prim_state.drop(['Election Set'], axis = 1)
     hisp_align_prim_state =  hisp_align_prim_state.drop(['Election Set'], axis = 1) 
               
-    ################################################################################
-    #get election weight 2 (minority preferred minority_ and combine for final            
+    #compute W2 ("in-group"-minority-preference weight)        
     min_cand_black_W2_dist, min_cand_hisp_W2_dist, min_cand_neither_W2_dist = compute_W2(elec_sets, \
           dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, hisp_pref_cands_prim_dist, cand_race_dict)
-    
+    ################################################################################    
     black_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_dist.drop(["Election Set"], axis=1)*black_conf_W3_dist.drop(["Election Set"], axis=1)
     black_weight_dist["Election Set"] = elec_sets
     hisp_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_dist.drop(["Election Set"], axis=1)*hisp_conf_W3_dist.drop(["Election Set"], axis=1)    
@@ -402,7 +394,7 @@ def final_elec_model(partition):
     neither_weight_dist["Election Set"] = elec_sets
                                   
     #################################################################################  
-    #district probability distribution: state
+    #district probability distribution: statewide
     final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
                  hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_state, \
                  black_weight_state, hisp_weight_state, dist_elec_results, dist_changes,
@@ -416,7 +408,7 @@ def final_elec_model(partition):
              cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
              black_align_prim_state, hisp_align_prim_state, "equal", logit_params, logit = True, single_map = False)
     
-       
+    #district probability distribution: district   
     final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist, black_pref_cands_runoffs_dist,\
              hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
              black_weight_dist, hisp_weight_dist, dist_elec_results, dist_changes,
@@ -451,8 +443,8 @@ def final_elec_model(partition):
     optimize_dict = final_state_prob if model_mode == 'statewide' else final_equal_prob\
                     if model_mode == 'equal' else final_dist_prob
                         
-    black_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'BCVAP')), 'Cutoff'].values[0]
-    hisp_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'HCVAP')), 'Cutoff'].values[0]
+    black_threshold = effectiveness_cutoff
+    hisp_threshold = effectiveness_cutoff
     
     hisp_effective = [i+l for i,j,k,l in optimize_dict.values()]
     black_effective = [j+l for i,j,k,l in optimize_dict.values()]
@@ -486,7 +478,7 @@ def num_county_splits(partition, df = state_gdf):
     df["current"] = df.index.map(partition.assignment.to_dict())
     return sum(df.groupby(county_split_id)['current'].nunique() > 1)
 
-#####construct updaters for Chain
+#####construct updaters for Chain###############################################
 my_updaters = {
     "population": updaters.Tally(tot_pop, alias = "population"),
     "CVAP": updaters.Tally(CVAP, alias = "CVAP"),
@@ -523,18 +515,10 @@ my_updaters.update(election_updaters)
 step_Num = 0
 total_population = state_gdf[tot_pop].sum()
 ideal_population = total_population/num_districts
-
-if ensemble_inclusion_demo:
-    seed_plans = demo_seed_plans
-elif model_mode == 'statewide':
-    seed_plans = state_seed_plans
-elif model_mode == 'equal':
-    seed_plans = equal_seed_plans
-else:
-    seed_plans = dist_seed_plans
     
-assignment = assignment1 if start_map == 'enacted' else dict(zip(seed_plans["Index"], seed_plans[start_map]))
-initial_partition = GeographicPartition(graph = graph, assignment = assignment, updaters = my_updaters)
+if start_map == 'new_seed':
+    start_map = recursive_tree_part(graph, range(num_districts), ideal_population, tot_pop, pop_tol, 3)    
+initial_partition = GeographicPartition(graph = graph, assignment = start_map, updaters = my_updaters)
 
 initial_partition.plot()
 proposal = partial(
@@ -563,9 +547,8 @@ def inclusion_demo(partition):
           
 #acceptance functions #####################################
 accept = accept.always_accept
-         
-    
-#define chain
+          
+#set Markov chain parameters
 chain = MarkovChain(
     proposal = proposal,
     constraints = [constraints.within_percent_of_ideal_population(initial_partition, pop_tol), inclusion] \
@@ -576,48 +559,47 @@ chain = MarkovChain(
     total_steps = total_steps
 )
 
-#prep storage for plans
+#prep plan storage #################################################################################
 store_plans = pd.DataFrame(columns = ["Index", "GEOID" ])
 store_plans["Index"] = list(initial_partition.assignment.keys())
 state_gdf_geoid = state_gdf[[geo_id]]
 store_plans["GEOID"] = [state_gdf_geoid.iloc[i][0] for i in store_plans["Index"]]
+#map-wide metrics storage
+map_metric = pd.DataFrame(columns = ["HO", "BO", "Distinct", "Cut Edges", "County Splits"], index = list(range(store_interval)))
 
-#prep district-by-district storage (each metric in its own df)
+#prep district-by-district storage
+#score distributions
 final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 final_equal_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-
-#demographic data storage (use 2018 CVAP for this!)
+#demographic data storage (uses 2018 CVAP)
 hisp_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-
-#partisan data "input"
+#partisan data storage
 pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 pres12_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 sen18_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 gov18_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+#district centroids storage
 centroids_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 
-map_metric = pd.DataFrame(columns = ["HO", "BO", "Distinct", "Cut Edges", "County Splits"], index = list(range(store_interval)))
-#effective precincts 
-effect_precincts = pd.DataFrame(columns = ["BO", "HO", "Either"], index = store_plans["Index"])
-effect_precincts = effect_precincts.fillna(0)
-
+#run chain and collect data ##############################################################################
 count_moves = 0
 step_Num = 0
 last_step_stored = 0
-black_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'BCVAP')), 'Cutoff'].values[0]
-hisp_threshold = model_cutoffs.loc[((model_cutoffs["model"] == model_mode) & (model_cutoffs["demog"] == 'HCVAP')), 'Cutoff'].values[0]
-#run chain and collect data
+black_threshold = effectiveness_cutoff
+hisp_threshold = effectiveness_cutoff
 start_time_total = time.time()
+
 for step in chain:
     print("chain starting")
+    
     final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
     total_hisp_final, total_black_final, total_distinct, optimize_dict = step["final_elec_model"]
     map_metric.loc[step_Num] = [total_hisp_final, total_black_final, total_distinct, step["num_cut_edges"], step["num_county_splits"]]
 
-    #saving at intervals
+    #saving all data at intervals
     if step_Num % store_interval == 0 and step_Num > 0:
         store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
         #store data and reset data frames
@@ -715,7 +697,7 @@ for step in chain:
     values = list(white_prop_data.values())
     white_prop_df.loc[step_Num % store_interval] = [value for _,value in sorted(zip(keys,values))]
     
-    order = [x for x in step.parts]
+    order = [int(x) for x in step.parts]
     percents = {}
     for elec in elections_track:
         percents[elec.name] = dict(zip(order, step[elec.name].percents("Democratic")))
@@ -760,28 +742,7 @@ for step in chain:
 
         final_dist_prob_df.loc[step_Num % store_interval] = final_dist_prob_df.loc[(step_Num % store_interval) -1]
         for i in final_dist_prob_dict.keys():
-            final_dist_prob_df.at[step_Num % store_interval, i] = final_dist_prob_dict[i] 
-
-    #store precincts that were in effective districts in this step
-    step_distributions = final_state_prob_df.loc[step_Num % store_interval]  if model_mode == 'statewide' else \
-            final_equal_prob_df.loc[step_Num % store_interval] if model_mode == 'equal' else \
-            final_dist_prob_df.loc[step_Num % store_interval]
-    step_dict = dict(zip((list(range(num_districts))), step_distributions))
-    
-    hisp_effective = [i+l for i,j,k,l in step_dict.values()]
-    black_effective = [j+l for i,j,k,l in step_dict.values()]
-    
-    hisp_effect_index = [i for i,n in enumerate(hisp_effective) if n >= hisp_threshold]
-    black_effect_index = [i for i,n in enumerate(black_effective) if n >= black_threshold]
-    either_effect_index = [i for i in range(num_districts) if i in hisp_effect_index or i in black_effect_index]
-    
-    hisp_precincts = [prec for prec in step.assignment.keys() if step.assignment[prec] in hisp_effect_index]
-    black_precincts = [prec for prec in step.assignment.keys() if step.assignment[prec] in black_effect_index]
-    either_precincts = [prec for prec in step.assignment.keys() if step.assignment[prec] in either_effect_index]
-              
-    effect_precincts.loc[effect_precincts.index.isin(hisp_precincts), "HO"] = effect_precincts.loc[effect_precincts.index.isin(hisp_precincts), "HO"]+1
-    effect_precincts.loc[effect_precincts.index.isin(black_precincts), "BO"] = effect_precincts.loc[effect_precincts.index.isin(black_precincts), "BO"]+1
-    effect_precincts.loc[effect_precincts.index.isin(either_precincts), "Either"] = effect_precincts.loc[effect_precincts.index.isin(either_precincts), "Either"]+1
+            final_dist_prob_df.at[step_Num % store_interval, i] = final_dist_prob_dict[i]               
        
     #store plans     
     if (inclusion(step) and (step_Num - last_step_stored) > 500) or \
@@ -795,19 +756,14 @@ for step in chain:
 
 #output data
 store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
-#store district-by-district data
-#demo data
 hisp_prop_df.to_csv(DIR + "outputs/hisp_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
 black_prop_df.to_csv(DIR + "outputs/black_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
 white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-#partisan data
 pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 pres12_df.to_csv(DIR + "outputs/pres12_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 sen18_df.to_csv(DIR + "outputs/sen18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 gov18_df.to_csv(DIR + "outputs/gov18_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 centroids_df.to_csv(DIR + "outputs/centroids_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
-
-effect_precincts.to_csv(DIR + "outputs/effect_precincts_{}.csv".format(run_name), index = True)
 map_metric.to_csv(DIR + "outputs/map_metric_{}.csv".format(run_name), index = True)
 #vra data
 if total_steps <= store_interval:
@@ -818,6 +774,7 @@ else:
     final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
     final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
     final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+
 ############# final print outs
 print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
 print("total moves", count_moves)

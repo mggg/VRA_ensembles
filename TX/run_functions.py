@@ -33,7 +33,7 @@ import operator
 DIR = ''
 
 def prob_conf_conversion(cand_prob):
-    #parameters chosen to be 0-ish confidence until 50% then rapid ascension to high confidence
+    #parameters chosen to be ~0 confidence until 50% then rapid ascension to confidence ~ 1
     cand_conf = 1/(1+np.exp(18-26*cand_prob))    
     return cand_conf
 
@@ -43,7 +43,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, \
                  mode, logit_params, logit = False, single_map = False):
-    #determine if election set accrues points by district for black and Latino voters
+    #determine if election set accrues points by district for Black and Latino voters
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
     runoff_winners = map_winners[map_winners["Election Type"] == 'Runoff'].reset_index(drop = True)
@@ -131,7 +131,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
         
     neither_pref_wins = (1-black_pref_wins.drop(['Election Set'], axis = 1))*(1-hisp_pref_wins.drop(['Election Set'], axis = 1))
     neither_pref_wins["Election Set"] = elec_sets
-    #election weight's number of points are accrued if black or latino preferred candidate(s) win (or proxies do)
+    #election set weight's number of points are accrued if Black or Latino preferred candidate(s) win (or proxies do)
     neither_points_accrued = neither_weight_df.drop(['Election Set'], axis = 1)*neither_pref_wins.drop(['Election Set'], axis = 1)  
     neither_points_accrued["Election Set"] = elec_sets
     black_points_accrued = black_weight_df.drop(['Election Set'], axis = 1)*black_pref_wins.drop(['Election Set'], axis = 1)  
@@ -140,7 +140,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     hisp_points_accrued["Election Set"] = elec_sets
     
 ########################################################################################
-    #Compute district probabilities: black, Latino, neither and overlap 
+    #Compute district probabilities: Black, Latino, Neither and Overlap 
     black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum((black_points_accrued.drop(['Election Set'], axis = 1)*black_align_prim)[i])/sum(black_weight_df[i]) for i in dist_changes]
     hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum((hisp_points_accrued.drop(['Election Set'], axis = 1)*hisp_align_prim)[i])/sum(hisp_weight_df[i]) for i in dist_changes]         
     neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_changes]   
@@ -173,6 +173,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
 #    final_overlap = ["N/A"]*len(dist_changes)
 #    final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
 #    final_hisp_prob = hisp_vra_prob
+    
     if single_map:
         return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
                 black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
