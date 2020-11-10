@@ -6,17 +6,21 @@ This code repository has the Texas elections model and its input data and files.
 
 All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE. Download *all* files into the same local directory to run the model.
 
-* ***Candidate_Race_Party***: This file has every candidate in each race used in the model (Amy - explain from Klarner's data?). It also has their race and party affiliation.
+* ***Candidate_Race_Party***: This file has every statewide candidate in each race used in the model. It also has their race and party affiliation.
 * ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
 * ***TX_elections***: Every election's year, type (primary, runoff or general) and "set" (the name used to refer to the set of an election's primary, runoff if applicable and general).
 * ***dropped_elecs***: Elections we removed from the analysis because they had uncontested Democratic primaries. The user can add more elections to this file if they want to limit the analysis further.
 * ***TX_logit_params***: Intercepts and coefficients for the best fit logit functions for the statewide, district and equal model scores.
 * ***recency_weights***: Election weights according to their years.
 * ***ingroup_weight***: Election weights according to whether the Latino (Black) prefferred candidate is Latino (Black).
-* ***statewide_rxc_EI_preferences***: Statewide EI results. Contains each candidate as well as their support from Black, Latino, White and Other voters. (Amy - add details).
+* ***statewide_rxc_EI_preferences***: Statewide EI results. Contains EI-predicted candidates of choice for Black, Latino, White and Other voters for each statewide election. Also listed are point estimates for level of support from these voters and proportion of EI draws that identified these candidates as the preferred candidates.
 
 * ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/). The shapefile has 2010 Census population data, ACS CVAP data  for several years, and election returns also from the Texas Legislative Council.
-* Amy to describe additional EI files.
+
+* ***mean_prec_vote_counts***: Point estimates for precinct-level vote counts by race for each statewide candidate.  These estimates are derived by averaging precinct-level EI draws.
+
+* ***prec_count_quants***: Quantile (octile) endpoints for precinct-level vote counts by race for each statewide candidate derived from the distribution of precinct-level EI draws.
+
 
 
 ### User Input Parameters ###
