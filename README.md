@@ -4,7 +4,7 @@ This code repository has the Texas elections model and its input data and files.
 
 ### Data and Input Files ###
 
-All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE. Download *all* files into the same local directory to run the model.
+All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found [HERE](https://www.dropbox.com/sh/k78n2hyixmv9xdg/AABmZG5ntMbXtX1VKThR7_t8a?dl=0). Download *all* files into the same local directory to run the model.
 
 * ***Candidate_Race_Party***: This file has every statewide candidate in each race used in the model. It also has their race and party affiliation.
 * ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
@@ -17,9 +17,10 @@ All input files are in this code repository, except for 3 files that were too la
 
 * ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/). The shapefile has 2010 Census population data, ACS CVAP data  for several years, and election returns also from the Texas Legislative Council.
 
-* ***mean_prec_vote_counts***: ([download here](https://www.dropbox.com/s/86v5k90m48tbybn/mean_prec_vote_counts.csv?dl=0)) Point estimates for precinct-level vote counts by race for each statewide candidate.  These estimates are derived by averaging precinct-level EI draws.
+* ***mean_prec_vote_counts***: Point estimates for precinct-level vote counts by race for each statewide candidate.  These estimates are derived by averaging precinct-level EI draws.
 
-* ***prec_count_quants***: ([download here](https://www.dropbox.com/s/64usx13olg4z5m2/prec_count_quants.csv?dl=0)) Quantile (octile) endpoints for precinct-level vote counts by race for each statewide candidate derived from the distribution of precinct-level EI draws.
+* ***prec_count_quants***: Quantile (octile) endpoints for precinct-level vote counts by race for each statewide candidate derived from the distribution of precinct-level EI draws.
+
 
 
 ### User Input Parameters ###
