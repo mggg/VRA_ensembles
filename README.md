@@ -23,6 +23,7 @@ All input files are in this code repository, except for 3 files that were too la
 
 
 ### User Input Parameters ###
+These are the only values in the model the user has to change. They are near the top of the *TX_elections_model* file.
 
 * ***total_steps***: The number of ReCom Markov chain steps in the run. This is the total number of accepted plans.
 * ***pop_tol***: Maximum allowable population deviation from the ideal (total population/number of districts).
