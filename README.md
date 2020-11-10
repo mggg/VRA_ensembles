@@ -2,9 +2,11 @@
 
 This code repository has the Texas elections model and its input data and files. *TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data. The only parameters for the user to enter are the 'User Input Parameters' in *TX_elections_model*. They are described below.
 
+To get started, download *all* input files into the same local directory. Make a folder called 'outputs' in the same directory.
+
 ### Data and Input Files ###
 
-All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE. Download *all* files into the same local directory to run the model.
+All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE. 
 
 * ***Candidate_Race_Party***: This file has every statewide candidate in each race used in the model. It also has their race and party affiliation.
 * ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
@@ -36,6 +38,7 @@ These are the only values in the model the user has to change. They are near the
 * ***store_interval***: The number of chain steps between storing data.
 
 ### Output Files ###
+These files will be stored in the 'outputs' folder of your local directory.
 
 * ***store_plans***: Every 500th plan is stored in this file. The first two columns are VTD IDs and indices, and each subsequent column has their district assignments for a plan.
 * ***hisp_prop_df***: Each column is a district, and each row has the HCVAP shares of district CVAP for a plan.
