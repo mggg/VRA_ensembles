@@ -1,6 +1,6 @@
 # VRA_article
 
-This code repository has the Texas elections model and its input data and files. *TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data.
+This code repository has the Texas elections model and its input data and files. *TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data. The only parameters for the user to enter are the 'User Input Parameters' in *TX_elections_model*. They are described below.
 
 ### Data and Input Files ###
 
