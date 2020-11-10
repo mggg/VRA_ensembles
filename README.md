@@ -17,7 +17,7 @@ All input files are in this code repository, except for 3 files that were too la
 * ***ingroup_weight***: Election weights according to whether the Latino (Black) prefferred candidate is Latino (Black).
 * ***statewide_rxc_EI_preferences***: Statewide EI results. Contains EI-predicted candidates of choice for Black, Latino, White and Other voters for each statewide election. Also listed are point estimates for level of support from these voters and proportion of EI draws that identified these candidates as the preferred candidates.
 
-* ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/). The shapefile has 2010 Census population data, ACS CVAP data  for several years, and election returns also from the Texas Legislative Council.
+* ***TX_VTDs***: The 2018 Texas VTD shapefile from The Texas Legislative Council. We have appended 2010 Census population data, ACS CVAP data for several years and election returns also from the Texas Legislative Council.
 
 * ***mean_prec_vote_counts***: ([download here](https://www.dropbox.com/s/86v5k90m48tbybn/mean_prec_vote_counts.csv?dl=0)) Point estimates for precinct-level vote counts by race for each statewide candidate.  These estimates are derived by averaging precinct-level EI draws.
 
