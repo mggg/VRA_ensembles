@@ -55,8 +55,30 @@ from functools import partial
 from run_functions import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
 cand_pref_all_draws_outcomes, cand_pref_all, cand_pref_all_alt_qv
 from ast import literal_eval
-#############################################################################################################
-#DATA PREP AND INPUTS:
+
+#user input parameters######################################
+total_steps = 10
+pop_tol = .01 #U.S. Cong (deviation from ideal district population)
+run_name = 'Texas_neutral_run'
+start_map = 'CD' #CD or 'new_seed'
+effectiveness_cutoff = .6
+ensemble_inclusion = False
+ensemble_inclusion_demo = False
+model_mode = 'statewide' #'district', 'equal', 'statewide'
+
+store_interval = 200  #how many Markov chain steps between data storage
+
+#fixed parameters#################################################
+num_districts = 36 #36 Congressional districts
+enacted_black = 4 #number of districts in enacted map with B + Ov > 60%
+enacted_hisp = 8 #number of districts in enacted map with L + Ov > 60%
+enacted_distinct = 11 #number of districts in enacted map with B + Ov > 60% or L + Ov > 60% or both
+plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
+run_type = 'free' 
+
+DIR = ''
+
+##################################################################
 #key column names from Texas VTD shapefile
 tot_pop = 'TOTPOP_x'
 white_pop = 'NH_WHITE'
@@ -69,33 +91,12 @@ county_split_id = "CNTY_x"
 C_X = "C_X"
 C_Y = "C_Y"
 
-#user input parameters######################################
-total_steps = 1000
-pop_tol = .01 #U.S. Cong (deviation from ideal district population)
-run_name = 'Texas_neutral_run'
-run_type = 'free' 
-model_mode = 'statewide' #'district', 'equal', 'statewide'
-start_map = 'CD' #CD, sldl358, sldu172, sldl309 or 'new_seed'
-ensemble_inclusion = False
-ensemble_inclusion_demo = False
-effectiveness_cutoff = .6
-
-#fixed parameters#################################################
-num_districts = 36 #150 state house, 31 senate, 36 Cong
-enacted_black = 4 #number of districts in enacted map with B + Ov > 60%
-enacted_hisp = 8 #number of districts in enacted map with L + Ov > 60%
-enacted_distinct = 11 #number of districts in enacted map with B + Ov > 60% or L + Ov > 60% or both
-plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
-store_interval = 200  #how many Markov chain steps between data storage
-
-DIR = ''
-
 #read files###################################################################
 elec_data = pd.read_csv("TX_elections.csv")
 TX_columns = list(pd.read_csv("TX_columns.csv")["Columns"])
 dropped_elecs = pd.read_csv("dropped_elecs.csv")["Dropped Elections"]
 recency_weights = pd.read_csv("recency_weights.csv")
-min_cand_weights = pd.read_csv("min_pref_weight_binary.csv")
+min_cand_weights = pd.read_csv("ingroup_weight.csv")
 cand_race_table = pd.read_csv("Candidate_Race_Party.csv")
 EI_statewide = pd.read_csv("statewide_rxc_EI_preferences.csv")
 prec_ei_df = pd.read_csv("prec_count_quants.csv", dtype = {'CNTYVTD':'str'})
@@ -443,11 +444,24 @@ def final_elec_model(partition):
     optimize_dict = final_state_prob if model_mode == 'statewide' else final_equal_prob\
                     if model_mode == 'equal' else final_dist_prob
                         
+    total_hisp_final_opt, total_black_final_opt, total_distinct_opt = effective_districts(optimize_dict)
+    
+    total_hisp_final_state, total_black_final_state, total_distinct_state = effective_districts(final_state_prob)
+    total_hisp_final_equal, total_black_final_equal, total_distinct_equal = effective_districts(final_equal_prob)
+    total_hisp_final_dist, total_black_final_dist, total_distinct_dist = effective_districts(final_dist_prob)
+    
+    return final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
+            total_hisp_final_opt, total_black_final_opt, total_distinct_opt, optimize_dict,\
+            total_hisp_final_state, total_black_final_state, total_distinct_state,\
+            total_hisp_final_equal, total_black_final_equal, total_distinct_equal, \
+            total_hisp_final_dist, total_black_final_dist, total_distinct_dist
+
+def effective_districts(dictionary):
     black_threshold = effectiveness_cutoff
     hisp_threshold = effectiveness_cutoff
     
-    hisp_effective = [i+l for i,j,k,l in optimize_dict.values()]
-    black_effective = [j+l for i,j,k,l in optimize_dict.values()]
+    hisp_effective = [i+l for i,j,k,l in dictionary.values()]
+    black_effective = [j+l for i,j,k,l in dictionary.values()]
     
     hisp_effect_index = [i for i,n in enumerate(hisp_effective) if n >= hisp_threshold]
     black_effect_index = [i for i,n in enumerate(black_effective) if n >= black_threshold]
@@ -455,9 +469,7 @@ def final_elec_model(partition):
     total_hisp_final = len(hisp_effect_index)
     total_black_final = len(black_effect_index)
     total_distinct = len(set(hisp_effect_index + black_effect_index))
-     
-    return final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-            total_hisp_final, total_black_final, total_distinct, optimize_dict
+    return total_hisp_final, total_black_final, total_distinct
                  
 def demo_percents(partition): 
     hisp_pct = {k: partition["HCVAP"][k]/partition["CVAP"][k] for k in partition["HCVAP"].keys()}
@@ -565,8 +577,10 @@ store_plans["Index"] = list(initial_partition.assignment.keys())
 state_gdf_geoid = state_gdf[[geo_id]]
 store_plans["GEOID"] = [state_gdf_geoid.iloc[i][0] for i in store_plans["Index"]]
 #map-wide metrics storage
-map_metric = pd.DataFrame(columns = ["HO", "BO", "Distinct", "Cut Edges", "County Splits"], index = list(range(store_interval)))
-
+map_metric = pd.DataFrame(columns = ["HO_state", "BO_state", "Distinct_state", \
+                                     "HO_equal", "BO_equal", "Distinct_equal", \
+                                     "HO_dist", "BO_dist", "Distinct_dist", \
+                                     "Cut Edges", "County Splits"], index = list(range(store_interval)))
 #prep district-by-district storage
 #score distributions
 final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
@@ -592,13 +606,19 @@ black_threshold = effectiveness_cutoff
 hisp_threshold = effectiveness_cutoff
 start_time_total = time.time()
 
-for step in chain:
-    print("chain starting")
-    
+print("chain starting")
+for step in chain:    
     final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-    total_hisp_final, total_black_final, total_distinct, optimize_dict = step["final_elec_model"]
-    map_metric.loc[step_Num] = [total_hisp_final, total_black_final, total_distinct, step["num_cut_edges"], step["num_county_splits"]]
-
+    total_hisp_final_opt, total_black_final_opt, total_distinct_opt, optimize_dict,\
+    total_hisp_final_state, total_black_final_state, total_distinct_state,\
+    total_hisp_final_equal, total_black_final_equal, total_distinct_equal, \
+    total_hisp_final_dist, total_black_final_dist, total_distinct_dist = step["final_elec_model"]
+        
+    map_metric.loc[step_Num] = [total_hisp_final_state, total_black_final_state, total_distinct_state,\
+                      total_hisp_final_equal, total_black_final_equal, total_distinct_equal, \
+                      total_hisp_final_dist, total_black_final_dist, total_distinct_dist,\
+                      step["num_cut_edges"], step["num_county_splits"]]
+    
     #saving all data at intervals
     if step_Num % store_interval == 0 and step_Num > 0:
         store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
@@ -745,12 +765,10 @@ for step in chain:
             final_dist_prob_df.at[step_Num % store_interval, i] = final_dist_prob_dict[i]               
        
     #store plans     
-    if (inclusion(step) and (step_Num - last_step_stored) > 500) or \
-        ((not inclusion(step)) and step_Num % 1000 == 0): 
-            
+    if (step_Num - last_step_stored) > 500:          
         last_step_stored = step_Num
         store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
-        print("stored new map!", total_hisp_final, total_black_final, total_distinct)
+        print("stored new map!")
     
     step_Num += 1
 
