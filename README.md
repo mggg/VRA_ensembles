@@ -1,6 +1,22 @@
 # VRA_article
 
-### User Inputs ###
+### Data and Input Files ###
+
+All input files are in this repo, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE.
+
+* ***Candidate_Race_Party***: This file has every candidate in each race used in the model (Amy - explain from Klarner's data?). It also has their race and party affiliation.
+* ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
+* ***TX_elections***: Every election's year, type (primary, runoff or general) and "set" (the name used to refer to the set of an election's primary, runoff if applicable and general).
+* ***dropped_elecs***: Elections we removed from the analysis because they had uncontested Democratic primaries. The user can add more elections to this file if they want to limit the analysis further.
+* ***TX_logit_params***: Intercepts and coefficients for the best fit logit functions for the statewide, district and equal model scores.
+* ***recency_weights***: Election weights according to their years.
+* ***ingroup_weight***: Election weights according to whether the Latino (Black) prefferred candidate is Latino (Black).
+* ***statewide_rxc_EI_preferences***: Statewide EI results. Contains each candidate as well as their support from Black, Latino, White and Other voters. (Amy - add details).
+
+* ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/) 
+
+
+### User Input Parameters ###
 
 * ***total_steps***: The number of ReCom Markov chain steps in the run. This is the total number of accepted plans.
 * ***pop_tol***: Maximum allowable population deviation from the ideal (total population/number of districts).
