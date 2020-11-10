@@ -1,8 +1,10 @@
 # VRA_article
 
+This code repository has the Texas elections model and its input data and files. *TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data.
+
 ### Data and Input Files ###
 
-All input files are in this repo, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE.
+All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be found HERE. Download *all* files into the same local directory to run the model.
 
 * ***Candidate_Race_Party***: This file has every candidate in each race used in the model (Amy - explain from Klarner's data?). It also has their race and party affiliation.
 * ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
@@ -13,7 +15,8 @@ All input files are in this repo, except for 3 files that were too large to stor
 * ***ingroup_weight***: Election weights according to whether the Latino (Black) prefferred candidate is Latino (Black).
 * ***statewide_rxc_EI_preferences***: Statewide EI results. Contains each candidate as well as their support from Black, Latino, White and Other voters. (Amy - add details).
 
-* ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/) 
+* ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/). The shapefile has 2010 Census population data, ACS CVAP data  for several years, and election returns also from the Texas Legislative Council.
+* Amy to describe additional EI files.
 
 
 ### User Input Parameters ###
