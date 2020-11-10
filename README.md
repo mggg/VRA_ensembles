@@ -17,10 +17,9 @@ All input files are in this code repository, except for 3 files that were too la
 
 * ***TX_VTDs***: The 2018 Texas VTD shapefile from [The Texas Legislative Council](https://data.capitol.texas.gov/). The shapefile has 2010 Census population data, ACS CVAP data  for several years, and election returns also from the Texas Legislative Council.
 
-* ***mean_prec_vote_counts***: Point estimates for precinct-level vote counts by race for each statewide candidate.  These estimates are derived by averaging precinct-level EI draws.
+* ***mean_prec_vote_counts***: ([download here](https://www.dropbox.com/s/86v5k90m48tbybn/mean_prec_vote_counts.csv?dl=0)) Point estimates for precinct-level vote counts by race for each statewide candidate.  These estimates are derived by averaging precinct-level EI draws.
 
-* ***prec_count_quants***: Quantile (octile) endpoints for precinct-level vote counts by race for each statewide candidate derived from the distribution of precinct-level EI draws.
-
+* ***prec_count_quants***: ([download here](https://www.dropbox.com/s/64usx13olg4z5m2/prec_count_quants.csv?dl=0)) Quantile (octile) endpoints for precinct-level vote counts by race for each statewide candidate derived from the distribution of precinct-level EI draws.
 
 
 ### User Input Parameters ###
