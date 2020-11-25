@@ -67,5 +67,7 @@ The model's data, inputs and outputs are analogous to those for the Texas model.
 
 Also, the LA model isn't currently set up to do constrained runs based on demographic thresholds. So there is no *ensemble_inclusion_demo* user-parameter, but it can do unconstrained runs and constrained runs based on VRA-effectiveness scores (with the *ensemble_inclusion* parameter).
 
+The LA model can be run starting from its current Congressional map or State Senate map (or a randomly generated seed map), but the population deviation (*pop_tol* parameter) will need to be adjusted accordingly.
+
 
 
