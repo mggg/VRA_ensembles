@@ -57,10 +57,10 @@ cand_pref_all_draws_outcomes, cand_pref_all, cand_pref_all_alt_qv
 from ast import literal_eval
 
 #user input parameters######################################
-total_steps = 10
+total_steps = 1000
 pop_tol = .01 #U.S. Cong (deviation from ideal district population)
 run_name = 'Texas_neutral_run'
-start_map = 'CD' #CD or 'new_seed'
+start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
 effectiveness_cutoff = .6
 ensemble_inclusion = False
 ensemble_inclusion_demo = False
@@ -74,7 +74,6 @@ enacted_black = 4 #number of districts in enacted map with B + Ov > 60%
 enacted_hisp = 8 #number of districts in enacted map with L + Ov > 60%
 enacted_distinct = 11 #number of districts in enacted map with B + Ov > 60% or L + Ov > 60% or both
 plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
-run_type = 'free' 
 
 DIR = ''
 
@@ -115,6 +114,7 @@ elections = list(elec_data_trunc["Election"])
 general_elecs = list(elec_data_trunc[elec_data_trunc["Type"] == 'General'].Election)
 primary_elecs = list(elec_data_trunc[elec_data_trunc["Type"] == 'Primary'].Election)
 runoff_elecs = list(elec_data_trunc[elec_data_trunc["Type"] == 'Runoff'].Election)
+
 #this dictionary matches a specific election with the election set it belongs to
 elec_set_dict = {}
 for elec_set in elec_sets:
@@ -126,9 +126,7 @@ elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Electio
 #reformat/re-index enacted map plans
 state_gdf = gpd.read_file(plot_path)
 state_gdf["CD"] = state_gdf["CD"].astype('int')
-state_gdf["sldu172"] = state_gdf["sldu172"] - 1
-state_gdf["sldl358"] = state_gdf["sldl358"] - 1
-state_gdf["sldl309"] = state_gdf["sldl309"] - 1
+state_gdf["Seed_Demo"] = state_gdf["Seed_Demo"].astype('int')
 state_gdf.columns = state_gdf.columns.str.replace("-", "_")
 
 #replace cut-off candidate names from shapefile with full names
@@ -140,7 +138,7 @@ state_gdf.columns = state_gdf_cols
 state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
-##build graph from geo_dataframe
+#build graph from geo_dataframe
 graph = Graph.from_geodataframe(state_gdf)
 graph.add_data(state_gdf)
 centroids = state_gdf.centroid
@@ -215,7 +213,7 @@ for elec in primary_elecs + runoff_elecs:
 min_cand_black_W2_state, min_cand_hisp_W2_state, min_cand_neither_W2_state = compute_W2(elec_sets, \
               range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, hisp_pref_cands_prim_state, cand_race_dict)
 
-#compute final election weights by taking product of W1, W2, and W3 for each election set and district
+#compute final election weights (for statewide and equal scores) by taking product of W1, W2, and W3 for each election set and district
 #Note: because these are statewide weights, an election set will have the same weight across districts
 black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
 black_weight_state["Election Set"] = elec_sets
@@ -224,7 +222,7 @@ hisp_weight_state["Election Set"] = elec_sets
 neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
 neither_weight_state["Election Set"] = elec_sets
 
-#equal weights are all 1
+#equal-score weights are all 1
 black_weight_equal = pd.DataFrame(columns = range(num_districts))
 black_weight_equal[0] = [1]*len(elec_sets)
 hisp_weight_equal = pd.DataFrame(columns = range(num_districts))
@@ -268,7 +266,7 @@ def final_elec_model(partition):
     #is the raw Black (Latino)-effectiviness score for the district. 
     
     # After the raw scores are computed, they are adjusted using an "Alignment" score, or a score
-    #the share of votes cast for a minority-preferred candidate by the minority group itself.
+    # that measures the share of votes cast for a minority-preferred candidate by the minority group itself.
     
     # Finally, the Black, Latino, Overlap, and Neither distribution (the values sum to 1) 
     # is computed, by feeding the adjusted effectiveness scores through a logit function,
@@ -532,11 +530,12 @@ if start_map == 'new_seed':
     start_map = recursive_tree_part(graph, range(num_districts), ideal_population, tot_pop, pop_tol, 3)    
 initial_partition = GeographicPartition(graph = graph, assignment = start_map, updaters = my_updaters)
 
-initial_partition.plot()
+initial_partition.plot(cmap = "Spectral")
+plt.axis("off")
+
 proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
 )
-
 
 #constraints ######################
 def inclusion(partition):
