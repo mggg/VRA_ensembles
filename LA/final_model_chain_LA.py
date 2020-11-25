@@ -135,14 +135,14 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 ##build graph from geo_dataframe
-#graph = Graph.from_geodataframe(state_gdf)
-#graph.add_data(state_gdf)
-#centroids = state_gdf.centroid
-#c_x = centroids.x
-#c_y = centroids.y
-#for node in graph.nodes():
-#    graph.nodes[node]["C_X"] = c_x[node]
-#    graph.nodes[node]["C_Y"] = c_y[node]
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
 
 #make dictionary that maps an election to its candidates
 candidates = {}
