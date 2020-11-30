@@ -424,7 +424,6 @@ if start_map == 'new_seed':
 
 step_Num = 0
 initial_partition = GeographicPartition(graph = graph, assignment = start_map, updaters = my_updaters)
-initial_partition.plot()
 proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
 )

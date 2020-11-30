@@ -528,9 +528,6 @@ if start_map == 'new_seed':
     start_map = recursive_tree_part(graph, range(num_districts), ideal_population, tot_pop, pop_tol, 3)    
 initial_partition = GeographicPartition(graph = graph, assignment = start_map, updaters = my_updaters)
 
-initial_partition.plot(cmap = "Spectral")
-plt.axis("off")
-
 proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
 )
