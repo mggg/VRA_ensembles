@@ -46,7 +46,7 @@ import re
 import operator
 import time
 import heapq
-import statsmodels.formula.api as smf
+#import statsmodels.formula.api as smf
 import statsmodels.api as sm
 import scipy
 from scipy import stats
@@ -59,7 +59,7 @@ from ast import literal_eval
 #DATA PREP AND INPUTS:
 
 #user input parameters ######################################################
-total_steps = 1000
+total_steps = 10
 pop_tol = .01  
 run_name = 'LA_neutral_Cong_run' 
 start_map = 'CD' #SEND, CD or 'new_seed'
@@ -162,7 +162,6 @@ recency_W1 = pd.DataFrame(columns = range(num_districts))
 recency_W1["Election Set"] = elec_sets
 black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
 black_conf_W3_state["Election Set"] = elec_sets
-
 
 #pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
 for elec_set in elec_sets:
@@ -418,14 +417,14 @@ election_functions = [Election(j, candidates[j]) for j in elections]
 election_updaters = {election.name: election for election in election_functions}
 my_updaters.update(election_updaters)
 
-#initial partition
+#initial partition########################
 total_population = state_gdf[tot_pop].sum()
 ideal_population = total_population/num_districts
 if start_map == 'new_seed':
     start_map = recursive_tree_part(graph, range(num_districts), ideal_population, tot_pop, pop_tol, 3)    
 
+step_Num = 0
 initial_partition = GeographicPartition(graph = graph, assignment = start_map, updaters = my_updaters)
-
 initial_partition.plot()
 proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
@@ -472,7 +471,6 @@ map_metric = pd.DataFrame(columns = ["B_state", "B_equal", "B_dist", \
                                      "Cut Edges", "County Splits"], index = list(range(store_interval)))
 
 count_moves = 0
-step_Num = 0
 best_score = 0
 last_step_stored = 0
 black_threshold = effectiveness_cutoff
