@@ -61,7 +61,7 @@ These files will be stored in the 'outputs' folder of your local directory.
 
 ## Louisiana
 
-All input files are in this code repository, except for 3 files that were too large to store here. They are the Louisiana precinct shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be downloaded HERE-AMY.
+All input files for Louisiana are in this code repository, except for 3 files that were too large to store here. Those are the Louisiana precinct shapefile (with electoral data attached) and two files that have precinct-level EI data, which can be downloaded [HERE](https://www.dropbox.com/sh/urf7qnt0egepxy3/AABsRPmVQJQBvB8P0FztaYH1a?dl=0).
 
 The model's data, inputs and outputs are analogous to those for the Texas model. Major differences include tracking outputs for only one major minority group (Black voters) instead of two. Therefore there are no longer 4-way district level probability distributions in the output files, etc.
 

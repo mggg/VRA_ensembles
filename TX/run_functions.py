@@ -22,8 +22,6 @@ import pandas as pd
 import collections
 from enum import Enum
 import re
-import statsmodels.formula.api as smf
-import statsmodels.api as sm
 import scipy
 from scipy import stats
 import time
