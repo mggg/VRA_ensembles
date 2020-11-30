@@ -46,8 +46,6 @@ import re
 import operator
 import time
 import heapq
-import statsmodels.formula.api as smf
-import statsmodels.api as sm
 import scipy
 from scipy import stats
 import sys
