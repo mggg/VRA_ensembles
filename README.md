@@ -6,7 +6,7 @@ This code repository has the Texas and Louisiana elections models, their input d
 
 *TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data. The only parameters for the user to enter are the 'User Input Parameters' in *TX_elections_model*. They are described below.
 
-To get started, download *all* input files into the same local directory. Make a folder called 'outputs' in the same directory.
+To get started, download *all* input files into the same local directory. Running *TX_elections_model* will make an 'outputs' folder in the directory.
 
 ### Data and Input Files ###
 
@@ -39,8 +39,11 @@ These are the only values in the model the user has to change. They are near the
 * ***effectiveness_cutoff***: Threshold for counting a district as effective for a particular group. 
 * ***ensemble_inclusion***: Set to 'True' to do a constrained run based on VRA-effectiveness scores (the score type is set in the *model_mode* parameter). The inclusion criteria requires a plan to have 8 Latino-effective districts, 4 Black-effective districts and 11 total districts that are effective for one or both groups. A district is Latino (Black) effective if its Latino + Overlap (Black + Overlap) scores exceeds the *effectiveness_cutoff*.
 * ***ensemble_inclusion_demo***: Set to 'True' to do a constrained run based on CVAP demographic constraints. The demographic inclusion criteria requires at least 8 districts above 50% HCVAP and at least 4 districts above 25% BCVAP. *ensemble_inclusion* and *ensemble_inclusion_demo* cannot both be True in the same run. Note, if *ensemble_inclusion_demo* is True, the *start_map* must be 'Seed_Demo', as the enacted Congressional map does not meet our demographic thresholds.
+* ***record_statewide_modes*** Set to 'True' to compute and record the 'statewide' and 'equal' effectiveness scores. If *ensemble_inclusion* is True and *model_mode* is set to 'statewide' or 'equal', then this setting must be 'True'.
+* ***record_district_mode*** Set to 'True' to compute and record the 'district' effectiveness score. If *ensemble_inclusion* is True and *model_mode* is set to 'district', then this setting must be 'True'.
 * ***model_mode***: 'statewide', 'equal' or 'district'. For constrained runs, this determines the score the inclusion criteria uses when evaluating a plan.
 * ***store_interval***: The number of chain steps between data-storing and resetting.
+
 
 ### Output Files ###
 These files will be stored in the 'outputs' folder of your local directory.
@@ -67,7 +70,7 @@ The model's data, inputs and outputs are analogous to those for the Texas model.
 
 Also, the LA model isn't currently set up to do constrained runs based on demographic thresholds. So there is no *ensemble_inclusion_demo* user-parameter, but it can do unconstrained runs and constrained runs based on VRA-effectiveness scores (with the *ensemble_inclusion* parameter).
 
-The LA model can be run starting from its current Congressional map or State Senate map (or a randomly generated seed map), but the population deviation (*pop_tol* parameter) will need to be adjusted accordingly.
+The LA model can be run starting from its current Congressional map ('CD') or State Senate map ('SEND') (or a randomly generated seed map), but the population deviation (*pop_tol* parameter) will need to be adjusted accordingly.
 
 
 
