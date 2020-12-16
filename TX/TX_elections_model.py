@@ -59,15 +59,15 @@ cand_pref_all_draws_outcomes, precompute_state_weights, compute_district_weights
 from ast import literal_eval
 
 #user input parameters######################################
-total_steps = 1000
+total_steps = 10
 pop_tol = .01 #U.S. Cong (deviation from ideal district population)
 run_name = 'Texas_neutral_run'
 start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
 effectiveness_cutoff = .6
-ensemble_inclusion = False
+ensemble_inclusion = True
 ensemble_inclusion_demo = False
 record_statewide_modes = True
-record_district_mode = True
+record_district_mode = False
 model_mode = 'statewide' #'district', 'equal', 'statewide'
 
 store_interval = 200  #how many Markov chain steps between data storage
@@ -257,41 +257,43 @@ def final_elec_model(partition):
 #########################################################################################
     #If we compute statewide modes: compute alignment/group-control scores for each district #################
     #and final probability distributions
-    black_align_prim_state, hisp_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                    black_pref_cands_prim_state, hisp_pref_cands_prim_state, elec_match_dict, \
-                                                    mean_prec_counts, geo_id)
-                                                
-    #district probability distribution: statewide
-    final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
-                            hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_state, \
-                            black_weight_state, hisp_weight_state, dist_elec_results, dist_changes,
-                            cand_race_table, num_districts, candidates, elec_sets, elec_set_dict,  \
-                            black_align_prim_state, hisp_align_prim_state, "statewide", logit_params, logit = True, single_map = False)
-    
-    #district probability distribution: equal
-    final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
-                            hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_equal, \
-                            black_weight_equal, hisp_weight_equal, dist_elec_results, dist_changes,
-                            cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                            black_align_prim_state, hisp_align_prim_state, "equal", logit_params, logit = True, single_map = False)
+    if record_statewide_modes: 
+        black_align_prim_state, hisp_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
+                                                        black_pref_cands_prim_state, hisp_pref_cands_prim_state, elec_match_dict, \
+                                                        mean_prec_counts, geo_id)
+                                                    
+        #district probability distribution: statewide
+        final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
+                                hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_state, \
+                                black_weight_state, hisp_weight_state, dist_elec_results, dist_changes,
+                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict,  \
+                                black_align_prim_state, hisp_align_prim_state, "statewide", logit_params, logit = True, single_map = False)
+        
+        #district probability distribution: equal
+        final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
+                                hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_equal, \
+                                black_weight_equal, hisp_weight_equal, dist_elec_results, dist_changes,
+                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
+                                black_align_prim_state, hisp_align_prim_state, "equal", logit_params, logit = True, single_map = False)
     
     #If we are computing district mode: ######################################################
     #compute district weights, preferred candidates, alignment/group control and district probability distribution: district   
-    black_weight_dist, hisp_weight_dist, neither_weight_dist, black_pref_cands_prim_dist,\
-    black_pref_cands_runoffs_dist, hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist\
-                             = compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
-                             geo_id, primary_elecs, runoff_elecs, elec_match_dict, bases, outcomes,\
-                             recency_W1, cand_race_dict, min_cand_weights_dict)
-    
-    black_align_prim_dist, hisp_align_prim_dist = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                  black_pref_cands_prim_dist, hisp_pref_cands_prim_dist, elec_match_dict, \
-                                                  mean_prec_counts, geo_id)
-    
-    final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist, black_pref_cands_runoffs_dist,\
-                           hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
-                           black_weight_dist, hisp_weight_dist, dist_elec_results, dist_changes,
-                           cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                           black_align_prim_dist, hisp_align_prim_dist, 'district', logit_params, logit = True, single_map = False)
+    if record_district_mode: 
+        black_weight_dist, hisp_weight_dist, neither_weight_dist, black_pref_cands_prim_dist,\
+        black_pref_cands_runoffs_dist, hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist\
+                                 = compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
+                                 geo_id, primary_elecs, runoff_elecs, elec_match_dict, bases, outcomes,\
+                                 recency_W1, cand_race_dict, min_cand_weights_dict)
+        
+        black_align_prim_dist, hisp_align_prim_dist = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
+                                                      black_pref_cands_prim_dist, hisp_pref_cands_prim_dist, elec_match_dict, \
+                                                      mean_prec_counts, geo_id)
+        
+        final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist, black_pref_cands_runoffs_dist,\
+                               hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
+                               black_weight_dist, hisp_weight_dist, dist_elec_results, dist_changes,
+                               cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
+                               black_align_prim_dist, hisp_align_prim_dist, 'district', logit_params, logit = True, single_map = False)
 
     #new vector of probability distributions-by-district is the same as last ReCom step, 
     #except in 2 changed districts 
