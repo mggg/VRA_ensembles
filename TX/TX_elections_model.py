@@ -145,6 +145,10 @@ c_y = centroids.y
 for node in graph.nodes():
     graph.nodes[node]["C_X"] = c_x[node]
     graph.nodes[node]["C_Y"] = c_y[node]
+    
+state_gdf.plot(color = 'white', edgecolor = 'black' )
+plt.axis("off")
+plt.savefig("TX_shapefile.png", bbox_inches = 'tight', dpi = 300)
 
 #make dictionary that maps an election to its candidates
 #only include 2 major party candidates in generals (assumes here major party candidates are first in candidate list)
