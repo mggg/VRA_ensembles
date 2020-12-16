@@ -59,7 +59,7 @@ cand_pref_all_draws_outcomes, precompute_state_weights, compute_district_weights
 from ast import literal_eval
 
 #user input parameters######################################
-total_steps = 10
+total_steps = 1000
 pop_tol = .01 #U.S. Cong (deviation from ideal district population)
 run_name = 'Texas_neutral_run'
 start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
