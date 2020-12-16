@@ -58,9 +58,10 @@ These files will be stored in the 'outputs' folder of your local directory.
 * ***gov18_df***: Each column is a district, and each row has the Democratic district vote shares in the 2018 Governor general race for a plan.
 * ***centroids_df***: Each column is a district, and each row has the district centroids for a plan.
 * ***map_metric***: Has the number of Latino effective districts, Black effective districts and total effective districts accoring to the statewide, equal and district scores for each plan. It also has the number of county splits and cut edges per plan.
-* ***final_state_prob_df***: Each column is a district, each row has the 4-way *statewide* VRA-effectiveness distributions for a plan. The distributions are in the order (L,O,N,Ov) (Latino-effectivenes, Black-effectiveness, Neither-effectiveness, Overlap-effectiveness).
-* ***final_dist_prob_df***: Each column is a district, each row has the 4-way *district* VRA-effectiveness distributions for a plan.
-* ***final_equal_prob_df***: Each column is a district, each row has the 4-way *equal* (unweighted) VRA-effectiveness distributions for a plan. 
+* ***final_state_prob_df***: (if *record_statewide_modes* is set to 'True') Each column is a district, each row has the 4-way *statewide* VRA-effectiveness distributions for a plan. The distributions are in the order (L,O,N,Ov) (Latino-effectivenes, Black-effectiveness, Neither-effectiveness, Overlap-effectiveness).
+* ***final_equal_prob_df***:  (if *record_statewide_modes* is set to 'True') Each column is a district, each row has the 4-way *equal* (unweighted) VRA-effectiveness distributions for a plan. 
+* ***final_dist_prob_df***:  (if *record_district_mode* is set to 'True') Each column is a district, each row has the 4-way *district* VRA-effectiveness distributions for a plan.
+
 
 ## Louisiana
 
