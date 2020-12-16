@@ -80,7 +80,8 @@ enacted_distinct = 11 #number of districts in enacted map with B + Ov > 60% or L
 plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
 
 DIR = ''
-os.mkdir(DIR + 'outputs')
+if not os.path.exists(DIR + 'outputs'):
+    os.mkdir(DIR + 'outputs')
 ##################################################################
 #key column names from Texas VTD shapefile
 tot_pop = 'TOTPOP_x'
