@@ -5,8 +5,7 @@ Created on Thu Feb 13 12:19:57 2020
 @author: darac
 """
 import random
-#a = random.randint(0,10000000000)
-a = 10
+a = random.randint(0,10000000000)
 import networkx as nx
 from gerrychain.random import random
 random.seed(a)
@@ -68,7 +67,7 @@ effectiveness_cutoff = .6
 ensemble_inclusion = False
 ensemble_inclusion_demo = False
 record_statewide_modes = True
-record_district_mode = True
+record_district_mode = False
 model_mode = 'statewide' #'district', 'equal', 'statewide'
 
 store_interval = 200  #how many Markov chain steps between data storage
@@ -83,6 +82,7 @@ plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
 DIR = ''
 if not os.path.exists(DIR + 'outputs'):
     os.mkdir(DIR + 'outputs')
+    
 ##################################################################
 #key column names from Texas VTD shapefile
 tot_pop = 'TOTPOP_x'
@@ -124,7 +124,6 @@ state_gdf.columns = state_gdf_cols
 state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
-
 #build graph from geo_dataframe #####################################################
 graph = Graph.from_geodataframe(state_gdf)
 graph.add_data(state_gdf)
@@ -134,7 +133,7 @@ c_y = centroids.y
 for node in graph.nodes():
     graph.nodes[node]["C_X"] = c_x[node]
     graph.nodes[node]["C_Y"] = c_y[node]
-#    
+    
 #set up elections data structures ################################################
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
@@ -491,7 +490,6 @@ start_time_total = time.time()
 
 print("chain starting")
 for step in chain:  
-    print("step num", step_Num)
     final_state_prob, final_equal_prob, final_dist_prob = step["final_elec_model"]
             
     total_hisp_final_state, total_black_final_state, total_distinct_state = effective_districts(final_state_prob)

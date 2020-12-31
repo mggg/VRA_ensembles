@@ -5,6 +5,10 @@ Created on Tue Jul 28 15:50:57 2020
 @author: darac
 """
 import random
+a = random.randint(0,10000000000)
+import networkx as nx
+from gerrychain.random import random
+random.seed(a)
 import csv
 import os
 import shutil
@@ -30,6 +34,93 @@ import operator
 
 DIR = ''
 
+def precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
+                             elec_match_dict, min_cand_weights_dict, cand_race_dict):
+    #map data storage: set up all dataframes to be filled   
+    black_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
+    black_pref_cands_prim_state["Election Set"] = elec_sets  
+    black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
+    black_conf_W3_state["Election Set"] = elec_sets
+    
+    #pre-compute W2 and W3 dfs for statewide/equal modes   
+    for elec in primary_elecs:
+        black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
+        black_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0]
+       
+        for district in range(num_districts):        
+            black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
+            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_ei_prob)                
+                  
+    min_cand_black_W2_state = compute_W2(elec_sets, range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, cand_race_dict)
+
+    #compute final election weights (for statewide and equal scores) by taking product of W1, W2, and W3 for each election set and district
+    #Note: because these are statewide weights, an election set will have the same weight across districts
+    black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
+    black_weight_state["Election Set"] = elec_sets
+    
+    #equal-score weights are all 1
+    black_weight_equal = pd.DataFrame(columns = range(num_districts))
+    black_weight_equal[0] = [1]*len(elec_sets)
+    for i in range(1, num_districts):
+        black_weight_equal[i] = 1  
+    black_weight_equal["Election Set"] = elec_sets
+    
+    return black_weight_state,  black_weight_equal, black_pref_cands_prim_state 
+
+def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
+                         black_pref_cands_prim, elec_match_dict, \
+                         mean_prec_counts, geo_id):
+    
+    black_align_prim = pd.DataFrame(columns = dist_changes)
+    black_align_prim["Election Set"] = elec_sets
+
+    for district in dist_changes:        
+        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
+        dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])        
+        cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
+        
+        for elec in primary_elecs:                                
+            black_pref_cand = black_pref_cands_prim.loc[black_pref_cands_prim["Election Set"] == elec_match_dict[elec], district].values[0]      
+            black_align_prim.at[black_align_prim["Election Set"] == elec_match_dict[elec], district] = \
+            sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/(sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand]))                       
+                                        
+    black_align_prim =  black_align_prim.drop(['Election Set'], axis = 1)
+    return black_align_prim
+
+def compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
+                             geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
+                             recency_W1, cand_race_dict, min_cand_weights_dict):
+    black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
+    black_pref_cands_prim_dist["Election Set"] = elec_sets
+    black_conf_W3_dist = pd.DataFrame(columns = dist_changes)
+    black_conf_W3_dist["Election Set"] = elec_sets
+    
+    for district in dist_changes:        
+        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
+        dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])
+        dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
+        district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
+        
+        for elec in primary_elecs:                                           
+            BCVAP_support_elec = district_support_all[('BCVAP', elec)]
+            black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
+            black_pref_prob_dist = BCVAP_support_elec[black_pref_cand_dist]
+            
+            #computing preferred candidate and confidence in that choice gives is weight 3        
+            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
+            black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_pref_prob_dist)           
+              
+    #compute W2 ("in-group"-minority-preference weight)        
+    min_cand_black_W2_dist = compute_W2(elec_sets, dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, cand_race_dict)
+   
+    ################################################################################    
+    #compute final election weights per district
+    black_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_dist.drop(["Election Set"], axis=1)*black_conf_W3_dist.drop(["Election Set"], axis=1)
+    black_weight_dist["Election Set"] = elec_sets
+    
+    return black_weight_dist, black_pref_cands_prim_dist
+           
+           
 def prob_conf_conversion(cand_prob):
     #parameters chosen to be 0-ish confidence until 50% then rapid ascenion to high confidence
     cand_conf = 1/(1+np.exp(18-26*cand_prob))    
@@ -123,36 +214,6 @@ def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,
 
 
 #to aggregrate precinct EI to district EI for district model mode
-
-#to aggregrate precinct EI to district EI for district model mode
-#def cand_pref_all(prec_quant_df, dist_prec_list, bases, outcomes, sample_size = 1000 ):
-#    ''' 
-#    prec_quant_df: precinct ei data drame
-#    dist_prec_list: list of precinct ids (for TX, CTYVTDS)
-#    bases: all demog/election/cand column name bases
-#    outcomes: dictionary of demog/elec pair to relavent column name bases
-#    sample_size: how many draws from precinct distributions
-#    '''
-#    quant_vals = [0,125,250,375,500,625,750,875,1000]
-#    dist_prec_quant = prec_quant_df[prec_quant_df['CNTYVTD'].isin(dist_prec_list)]    
-#    draws = {}
-#    for base in bases:
-#        vec_rand = np.random.rand(sample_size,len(dist_prec_quant))
-#        vec_rand_shift = np.array(dist_prec_quant[base +'.'+ '0'])+ sum(np.minimum(np.maximum(vec_rand-quant_vals[qv]/1000,0),.125)*8*np.array(dist_prec_quant[base + '.' +  str(quant_vals[qv+1])]-dist_prec_quant[base + '.'+ str(quant_vals[qv])]) for qv in range(len(quant_vals)-1))
-#        draws[base] = vec_rand_shift.sum(axis=1)  
-#        
-#    return {outcome:{base.split('.')[1].split('_counts')[0]:sum([1 if draws[base][i]==max([draws[base_][i] for base_ in outcomes[outcome]]) else 0 for i in range(sample_size)])/sample_size for base in outcomes[outcome]} for outcome in outcomes.keys()}
-#
-#def cand_pref_all_alt_qv(prec_quant_df, dist_prec_list, bases, outcomes, sample_size = 1000 ):
-#    quant_vals = np.array([0,125,250,375,500,625,750,875,1000])
-#    dist_prec_quant = prec_quant_df[prec_quant_df['CNTYVTD'].isin(dist_prec_list)]    
-#    draws = {}
-#    for base in bases:
-#        vec_rand_shift = np.concatenate([np.random.rand(int(sample_size/8),len(dist_prec_quant))*(np.array(dist_prec_quant[base + '.' +  str(quant_vals[qv+1])])-np.array(dist_prec_quant[base + '.'+ str(quant_vals[qv])]))+np.array(dist_prec_quant[base + '.'+ str(quant_vals[qv])]) for qv in range(len(quant_vals)-1)])
-#        list(map(np.random.shuffle, vec_rand_shift.T))
-#        draws[base] = vec_rand_shift.sum(axis=1) 
-#    return {outcome:{base.split('.')[1].split('_counts')[0]:sum([1 if draws[base][i]==max([draws[base_][i] for base_ in outcomes[outcome]]) else 0 for i in range(sample_size)])/sample_size for base in outcomes[outcome]} for outcome in outcomes.keys()}
-
 def cand_pref_all_draws_outcomes(prec_quant_df, precs, bases, outcomes, sample_size = 1000 ):
     quant_vals = np.array([0,125,250,375,500,625,750,875,1000])
     draws = {}

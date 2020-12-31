@@ -5,6 +5,10 @@ Created on Thu Feb 13 12:19:57 2020
 @author: darac
 """
 import random
+a = random.randint(0,10000000000)
+import networkx as nx
+from gerrychain.random import random
+random.seed(a)
 import csv
 import os
 import shutil
@@ -52,10 +56,9 @@ from scipy import stats
 import sys
 from functools import partial
 from run_functions_LA import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
-cand_pref_all_draws_outcomes
+cand_pref_all_draws_outcomes, compute_district_weights, precompute_state_weights, compute_align_scores
 from ast import literal_eval
 #############################################################################################################
-#DATA PREP AND INPUTS:
 
 #user input parameters ######################################################
 total_steps = 10
@@ -63,7 +66,9 @@ pop_tol = .01
 run_name = 'LA_neutral_Cong_run' 
 start_map = 'CD' #SEND, CD or 'new_seed'
 effectiveness_cutoff = .65
-ensemble_inclusion = False
+ensemble_inclusion = True
+record_statewide_modes = True
+record_district_mode = True
 model_mode = 'statewide' #'district', 'equal', 'statewide'
 store_interval = 200  #how many Markov chain steps between data storage intervals
 
@@ -74,6 +79,9 @@ plot_path = 'LA_final/LA_final.shp'
 county_split_id = 'COUNTYFP'
 
 DIR = ''
+if not os.path.exists(DIR + 'outputs'):
+    os.mkdir(DIR + 'outputs')
+
 ##################################################################
 #key column names from Texas VTD shapefile
 tot_pop = 'TOTPOP'
@@ -98,7 +106,31 @@ prec_ei_df = pd.read_csv("LA_prec_quant_counts.csv", dtype = {'CNTYVTD':'str'})
 mean_prec_counts = pd.read_csv("LA_prec_means_counts.csv", dtype = {'CNTYVTD':'str'})
 logit_params = pd.read_csv("LA_logit_params.csv")
 
-#set up elections data structures
+#initialize state_gdf##################################################
+state_gdf = gpd.read_file(plot_path)
+state_gdf.columns = state_gdf.columns.str.replace("-", "_")
+
+#replace cut-off candidate names from shapefile with full names
+state_gdf_cols = list(state_gdf.columns)
+cand1_index = state_gdf_cols.index('DeatonD_15')
+cand2_index = state_gdf_cols.index('WolfeD_16P')
+state_gdf_cols[cand1_index:cand2_index+1] = elec_columns
+state_gdf.columns = state_gdf_cols
+state_gdf['LandrieuI_19P_Governor'] = state_gdf['LandrieuI_19P_Governor'].astype(float)
+state_df = pd.DataFrame(state_gdf)
+state_df = state_df.drop(['geometry'], axis = 1)
+
+##build graph from geo_dataframe#####################################
+graph = Graph.from_geodataframe(state_gdf)
+graph.add_data(state_gdf)
+centroids = state_gdf.centroid
+c_x = centroids.x
+c_y = centroids.y
+for node in graph.nodes():
+    graph.nodes[node]["C_X"] = c_x[node]
+    graph.nodes[node]["C_Y"] = c_y[node]
+
+#set up elections data structures###########################################################
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
 elec_cand_list = elec_columns
@@ -117,31 +149,6 @@ for elec_set in elec_sets:
     elec_set_dict[elec_set] = dict(zip(elec_set_df.Type, elec_set_df.Election))
 elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Election Set"]))
 
-#initialize state_gdf
-#reformat/re-index enacted map plans
-state_gdf = gpd.read_file(plot_path)
-state_gdf.columns = state_gdf.columns.str.replace("-", "_")
-
-#replace cut-off candidate names from shapefile with full names
-state_gdf_cols = list(state_gdf.columns)
-cand1_index = state_gdf_cols.index('DeatonD_15')
-cand2_index = state_gdf_cols.index('WolfeD_16P')
-state_gdf_cols[cand1_index:cand2_index+1] = elec_columns
-state_gdf.columns = state_gdf_cols
-state_gdf['LandrieuI_19P_Governor'] = state_gdf['LandrieuI_19P_Governor'].astype(float)
-
-state_df = pd.DataFrame(state_gdf)
-state_df = state_df.drop(['geometry'], axis = 1)
-
-##build graph from geo_dataframe
-graph = Graph.from_geodataframe(state_gdf)
-graph.add_data(state_gdf)
-centroids = state_gdf.centroid
-c_x = centroids.x
-c_y = centroids.y
-for node in graph.nodes():
-    graph.nodes[node]["C_X"] = c_x[node]
-    graph.nodes[node]["C_Y"] = c_y[node]
 
 #make dictionary that maps an election to its candidates
 candidates = {}
@@ -152,59 +159,36 @@ for elec in elections:
 cand_race_dict = cand_race_table.set_index("Candidates").to_dict()["Race"]
 min_cand_weights_dict = {key:min_cand_weights.to_dict()[key][0] for key in  min_cand_weights.to_dict().keys()}     
 
-#precompute election recency weights and statewide EI for statewide/district mode
-#map data storage: set up all dataframes to be filled   
-black_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
-black_pref_cands_prim_state["Election Set"] = elec_sets
-
+########################################## pre-compute as much as possible for elections updater ##########
+#precompute election recency weights W1 for all scores
 recency_W1 = pd.DataFrame(columns = range(num_districts))
 recency_W1["Election Set"] = elec_sets
-black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-black_conf_W3_state["Election Set"] = elec_sets
-
-#pre-compute recency_W1 df for all model modes, and W3, W2 dfs for statewide/equal modes    
 for elec_set in elec_sets:
         elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)
         for dist in range(num_districts):
             recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
-   
-#pre-compute W2 and W3 dfs for statewide/equal modes  
-for elec in primary_elecs:
-    black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]  
-    black_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0]
   
-    for district in range(num_districts):         
-        black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-        black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_ei_prob)
-                                                        
-#population scaling for alignment
-min_cand_black_W2_state = compute_W2(elec_sets, \
-              range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, cand_race_dict)
 
-#compute final election weights (for statewide and equal scores) by taking product of W1, W2, and W3 for each election set and district
-#Note: because these are statewide weights, an election set will have the same weight across districts
+#precompute statewide EI and W1, W2, W3 for statewide/equal modes 
+if record_statewide_modes:
+    black_weight_state,  black_weight_equal, black_pref_cands_prim_state \
+                     = precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
+                       elec_match_dict, min_cand_weights_dict, cand_race_dict)
 
-black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
-black_weight_state["Election Set"] = elec_sets
-#equal-score weights are all 1
-black_weight_equal = pd.DataFrame(columns = range(num_districts))
-black_weight_equal[0] = [1]*len(elec_sets)
-for i in range(1, num_districts):
-    black_weight_equal[i] = 1
-black_weight_equal["Election Set"] = elec_sets
-
-#precompute set up for district mode (need precinct level EI set up)
+#precompute set-up for district mode, if used (need precinct level EI set up)
 #need to precompute all the column bases and dictionary for all (demog, election) pairs
-demogs = ['BCVAP']
-bases = {col.split('.')[0]+'.'+col.split('.')[1] for col in prec_ei_df.columns if col[:5] in demogs and 'ABSTAIN' not in col and \
+if record_district_mode:             
+    demogs = ['BCVAP']
+    bases = {col.split('.')[0]+'.'+col.split('.')[1] for col in prec_ei_df.columns if col[:5] in demogs and 'ABSTAIN' not in col and \
           not any(x in col for x in general_elecs)}
-base_dict = {b:(b.split('.')[0], '_'.join(b.split('.')[1].split('_')[1:])) for b in bases}
-outcomes = {val:[] for val in base_dict.values()}
-for b in bases:
-    outcomes[base_dict[b]].append(b) 
-    
-precs = list(state_gdf[geo_id])
-prec_draws_outcomes = cand_pref_all_draws_outcomes(prec_ei_df, precs, bases, outcomes)
+    base_dict = {b:(b.split('.')[0], '_'.join(b.split('.')[1].split('_')[1:])) for b in bases}
+    outcomes = {val:[] for val in base_dict.values()}
+    for b in bases:
+        outcomes[base_dict[b]].append(b) 
+        
+    precs = list(state_gdf[geo_id])
+    prec_draws_outcomes = cand_pref_all_draws_outcomes(prec_ei_df, precs, bases, outcomes)
+
 ############################################################################################################       
 #UPDATERS FOR CHAIN
 
@@ -257,124 +241,82 @@ def final_elec_model(partition):
     for i in dist_changes:
         map_winners[i] = [max(dist_elec_results[elec][i].items(), key=operator.itemgetter(1))[0] for elec in elections]
 
-    black_pref_cands_prim_dist = pd.DataFrame(columns = range(num_districts))
-    black_pref_cands_prim_dist["Election Set"] = elec_sets
-
-    black_conf_W3_dist = pd.DataFrame(columns = range(num_districts))
-    black_conf_W3_dist["Election Set"] = elec_sets
-
-    black_align_prim_dist = pd.DataFrame(columns = range(num_districts))
-    black_align_prim_dist["Election Set"] = elec_sets
-    
-    #need to compute alignment score district by district - even in STATEWIDE modes!! (may have diff candidate of choice etc.)
-    black_align_prim_state = pd.DataFrame(columns = range(num_districts))
-    black_align_prim_state["Election Set"] = elec_sets
-    
-    #to compute district weights, preferred candidate and confidence is computed
-    #for each district at every ReCom step
-    for district in dist_changes: #get vector of precinct values for each district                  
-        #only need preferred candidates and condidence in primary and runoffs
-        #(in Generals we only care if the Democrat wins)
-        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
-        dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])
-        dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
-        district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
-        
-        cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
- 
-        for elec in primary_elecs:                                            
-            BCVAP_support_elec = district_support_all[('BCVAP', elec)]
-            black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
-            black_pref_prob_dist = BCVAP_support_elec[black_pref_cand_dist]
-            
-            black_pref_cand_state = black_pref_cands_prim_state.loc[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district].values[0]
-            #computing preferred candidate and confidence in that choice gives is weight 3        
-
-            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
-            black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_pref_prob_dist)
-            
-            black_align_prim_dist.at[black_align_prim_dist["Election Set"] == elec_match_dict[elec], district] = \
-            sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand_dist])/(sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand_dist ]) + sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand_dist ]) +  sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand_dist ]))
-         
-            black_align_prim_state.at[black_align_prim_state["Election Set"] == elec_match_dict[elec], district] = \
-            sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand_state ])/(sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand_state ]) + sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand_state]) +  sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand_state]))
-    
-    
-    black_align_prim_dist =  black_align_prim_dist.drop(['Election Set'], axis = 1)        
-    black_align_prim_state =  black_align_prim_state.drop(['Election Set'], axis = 1)             
-    ################################################################################
-    #get election weight 2 (minority preferred minority_ and combine for final            
-    min_cand_black_W2_dist = compute_W2(elec_sets, \
-          dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, cand_race_dict)
-    
-    black_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_dist.drop(["Election Set"], axis=1)*black_conf_W3_dist.drop(["Election Set"], axis=1)
-    black_weight_dist["Election Set"] = elec_sets
-                                  
-    #################################################################################  
-    #district probability distribution: state
-    final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
-                 black_weight_state, dist_elec_results, dist_changes,
-                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict,  \
-                 black_align_prim_state,  "statewide", logit_params, logit = True, single_map = False)
-    
-    #district probability distribution: equal
-    final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
-             black_weight_equal, dist_elec_results, dist_changes,
-             cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-             black_align_prim_state, "equal", logit_params, logit = True, single_map = False)
-    
+    ###########################################################################################
+    #If we compute statewide modes: compute alignment/group-control scores for each district #################
+    #and final probability distributions
+    if record_statewide_modes: 
+        black_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
+                                                        black_pref_cands_prim_state,  elec_match_dict, mean_prec_counts, geo_id)
        
-    final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist,\
-             black_weight_dist, dist_elec_results, dist_changes,
-             cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-             black_align_prim_dist, 'district', logit_params, logit = True, single_map = False)
-
-    #new vector of probability distributions-by-district is the same as last ReCom step, except in 2 districts 
-    if step_Num == 0:
-         final_state_prob = {key:final_state_prob_dict[key] for key in sorted(final_state_prob_dict)}
-         final_equal_prob = {key:final_equal_prob_dict[key] for key in sorted(final_equal_prob_dict)}
-         final_dist_prob = {key:final_dist_prob_dict[key] for key in sorted(final_dist_prob_dict)}
-         
-    elif step_Num % store_interval == 0 and step_Num > 0:
-        final_state_prob = dict(final_state_prob_df.loc[store_interval-1])
-        final_equal_prob = dict(final_equal_prob_df.loc[store_interval-1])
-        final_dist_prob = dict(final_dist_prob_df.loc[store_interval-1])
+    
+    #district probability distribution: statewide
+        final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
+                                black_weight_state, dist_elec_results, dist_changes,\
+                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
+                                black_align_prim_state, "statewide", logit_params, logit = True, single_map = False)
         
-        for i in final_state_prob_dict.keys():
-             final_state_prob[i] = final_state_prob_dict[i]
-             final_equal_prob[i] = final_equal_prob_dict[i]
-             final_dist_prob[i] = final_dist_prob_dict[i]
-    else:
-        final_state_prob = dict(final_state_prob_df.loc[(step_Num % store_interval)-1])
-        final_equal_prob = dict(final_equal_prob_df.loc[(step_Num % store_interval)-1])
-        final_dist_prob = dict(final_dist_prob_df.loc[(step_Num % store_interval)-1])
+        #district probability distribution: equal
+        final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
+                                black_weight_equal, dist_elec_results, dist_changes,
+                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
+                                black_align_prim_state, "equal", logit_params, logit = True, single_map = False)
+    
+    
+    
+    
+    if record_district_mode: 
+        black_weight_dist, black_pref_cands_prim_dist \
+                                 = compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
+                                 geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
+                                 recency_W1, cand_race_dict, min_cand_weights_dict)
+        
+        black_align_prim_dist = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
+                                                      black_pref_cands_prim_dist, elec_match_dict, \
+                                                      mean_prec_counts, geo_id)
 
-        for i in final_state_prob_dict.keys():
-             final_state_prob[i] = final_state_prob_dict[i]
-             final_equal_prob[i] = final_equal_prob_dict[i]
-             final_dist_prob[i] = final_dist_prob_dict[i]
+        final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist,
+                               black_weight_dist, dist_elec_results, dist_changes,
+                               cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
+                               black_align_prim_dist, 'district', logit_params, logit = True, single_map = False)
+
+    #new vector of probability distributions-by-district is the same as last ReCom step, 
+    #except in 2 changed districts 
+    if partition.parent == None:
+         final_state_prob = {key:final_state_prob_dict[key] for key in sorted(final_state_prob_dict)}\
+         if record_statewide_modes else {key:"N/A" for key in sorted(dist_changes)}
+         
+         final_equal_prob = {key:final_equal_prob_dict[key] for key in sorted(final_equal_prob_dict)}\
+         if record_statewide_modes else {key:"N/A" for key in sorted(dist_changes)}
+         
+         final_dist_prob = {key:final_dist_prob_dict[key] for key in sorted(final_dist_prob_dict)}\
+         if record_district_mode else {key:"N/A" for key in sorted(dist_changes)}
+         
+    else:
+        final_state_prob = partition.parent["final_elec_model"][0].copy()
+        final_equal_prob =  partition.parent["final_elec_model"][1].copy()
+        final_dist_prob = partition.parent["final_elec_model"][2].copy()
+        
+        for i in dist_changes:
+            if record_statewide_modes:
+                final_state_prob[i] = final_state_prob_dict[i]
+                final_equal_prob[i] = final_equal_prob_dict[i]
+            
+            if record_district_mode:
+                final_dist_prob[i] = final_dist_prob_dict[i]
     
-    optimize_dict = final_state_prob if model_mode == 'statewide' else final_equal_prob\
-                    if model_mode == 'equal' else final_dist_prob
-                        
-    total_black_final_opt = effective_districts(optimize_dict)
-    
-    total_black_final_state = effective_districts(final_state_prob)
-    total_black_final_equal = effective_districts(final_equal_prob)
-    total_black_final_dist = effective_districts(final_dist_prob)
- 
-    return final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-            total_black_final_opt, optimize_dict, total_black_final_state, \
-            total_black_final_equal, total_black_final_dist
+    return final_state_prob, final_equal_prob, final_dist_prob
                  
 def effective_districts(dictionary):
-    print(dictionary)
     black_threshold = effectiveness_cutoff
-    black_effective = [i for i,j in dictionary.values()]
-    black_effect_index = [i for i,n in enumerate(black_effective) if n >= black_threshold]
     
-    total_black_final = len(black_effect_index)
-    return  total_black_final
+    if "N/A" not in dictionary.values():
+        black_effective = [i for i,j in dictionary.values()]
+        black_effect_index = [i for i,n in enumerate(black_effective) if n >= black_threshold]        
+        total_black_final = len(black_effect_index)
+       
+        return total_black_final
+    else:
+        return "N/A" 
                  
 def demo_percents(partition): 
     black_pct = {k: partition["BCVAP"][k]/partition["CVAP"][k] for k in partition["BCVAP"].keys()}
@@ -427,14 +369,17 @@ initial_partition = GeographicPartition(graph = graph, assignment = start_map, u
 proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
 )
-       
-#acceptance functions
-accept = accept.always_accept
 
-#constraints
+
+#constraints##############################################################
 def inclusion(partition):
-    black_vra_dists = partition["final_elec_model"][3]    
+    final_state_prob, final_equal_prob, final_dist_prob = partition["final_elec_model"]
+    inclusion_dict = final_state_prob if model_mode == 'statewide' else final_equal_prob if model_mode == 'equal' else final_dist_prob
+    black_vra_dists = effective_districts(inclusion_dict)
     return black_vra_dists >= enacted_black
+
+#acceptance functions #####################################
+accept = accept.always_accept
     
 #define chain
 chain = MarkovChain(
@@ -446,38 +391,50 @@ chain = MarkovChain(
     total_steps = total_steps
 )
 
-#prep storage for plans
+#prep storage for plans################################################
 store_plans = pd.DataFrame(columns = ["Index", "GEOID" ])
 store_plans["Index"] = list(initial_partition.assignment.keys())
 state_gdf_geoid = state_gdf[[geo_id]]
 store_plans["GEOID"] = [state_gdf_geoid.iloc[i][0] for i in store_plans["Index"]]
-
-#prep district-by-district storage (each metric in its own df)
-final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-final_equal_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-
-#demographic data storage (use 2018 CVAP for this!)
-black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-
-#partisan data "input"
-pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-sen16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-centroids_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 map_metric = pd.DataFrame(columns = ["B_state", "B_equal", "B_dist", \
                                      "Cut Edges", "County Splits"], index = list(range(store_interval)))
 
+
+#prep district-by-district storage (each metric in its own df)
+#score distributions
+score_dfs = []
+score_df_names = []
+if record_statewide_modes:
+    final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+    final_equal_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+    score_dfs.extend([final_state_prob_df, final_equal_prob_df])
+    score_df_names.extend(['final_state_prob_df', 'final_equal_prob_df'])
+if record_district_mode:
+    final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+    score_dfs.append(final_dist_prob_df)
+    score_df_names.append('final_dist_prob_df')
+
+#demographic data storage (uses 2018 CVAP)
+black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+#partisan data storage
+pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+sen16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+centroids_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
+
+#run chain and collect data #############################################################################
 count_moves = 0
 best_score = 0
 last_step_stored = 0
 black_threshold = effectiveness_cutoff
-#run chain and collect data
+
 start_time_total = time.time()
 for step in chain:
-    final_state_prob_dict, final_equal_prob_dict, final_dist_prob_dict, \
-    total_black_final, optimize_dict, total_black_final_state, \
-    total_black_final_equal, total_black_final_dist = step["final_elec_model"]
+    final_state_prob, final_equal_prob, final_dist_prob = step["final_elec_model"]     
+    total_black_final_state = effective_districts(final_state_prob)
+    total_black_final_equal = effective_districts(final_equal_prob)
+    total_black_final_dist = effective_districts(final_dist_prob)
+    
     map_metric.loc[step_Num] = [total_black_final_state, total_black_final_equal, \
                   total_black_final_equal, step["num_cut_edges"], step["num_county_splits"]]
 
@@ -498,21 +455,10 @@ for step in chain:
             white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), index = False)
             white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
                  
-            final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
-            last_state_prob_dict = dict(zip(final_state_prob_df.columns, final_state_prob_df.loc[step_Num - 1]))
-            final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
-            final_state_prob_df.loc[-1] = list(last_state_prob_dict.values())
-            
-            final_equal_prob_df.to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), index= False)
-            last_equal_prob_dict = dict(zip(final_equal_prob_df.columns, final_equal_prob_df.loc[step_Num - 1]))
-            final_equal_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
-            final_equal_prob_df.loc[-1] = list(last_equal_prob_dict.values())
-            
-            final_dist_prob_df.to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), index= False)
-            last_dist_prob_dict = dict(zip(final_dist_prob_df.columns, final_dist_prob_df.loc[step_Num - 1]))
-            final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
-            final_dist_prob_df.loc[-1] = list(last_dist_prob_dict.values())
-            
+            for score_df, score_df_name in zip(score_dfs, score_df_names):
+                score_df.to_csv(DIR + "outputs/{}_{}.csv".format(score_df_name,run_name), index= False)
+                score_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))           
+           
             map_metric.to_csv(DIR + "outputs/map_metric_{}.csv".format(run_name), index = True)
         else:
             pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
@@ -525,21 +471,12 @@ for step in chain:
             white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
             white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
                     
-            last_state_prob_dict = dict(zip(final_state_prob_df.columns, final_state_prob_df.loc[(step_Num - 1) % store_interval]))
-            final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
-            final_state_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
-            final_state_prob_df.loc[-1] = list(last_state_prob_dict.values())
+            for score_df, score_df_name in zip(score_dfs, score_df_names):
+                score_df.to_csv(DIR + "outputs/{}_{}.csv".format(score_df_name,run_name), mode = 'a', header = False, index= False)
+                score_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))           
             
-            last_equal_prob_dict = dict(zip(final_equal_prob_df.columns, final_equal_prob_df.loc[(step_Num -1) % store_interval]))
-            final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
-            final_equal_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
-            final_equal_prob_df.loc[-1] = list(last_equal_prob_dict.values())
-            
-            last_dist_prob_dict = dict(zip(final_dist_prob_df.columns, final_dist_prob_df.loc[(step_Num - 1) % store_interval]))
-            final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)            
-            final_dist_prob_df = pd.DataFrame(columns = range(num_districts), index = [-1] + list(range(store_interval)))
-            final_dist_prob_df.loc[-1] = list(last_dist_prob_dict.values())
             map_metric.to_csv(DIR + "outputs/map_metric_{}.csv".format(run_name), index = True)
+    
     if step.parent is not None:
         if step.assignment != step.parent.assignment:
             count_moves += 1
@@ -568,38 +505,19 @@ for step in chain:
     values = list(percents["SEN16"].values())
     sen16_df.loc[step_Num % store_interval] = [value for _,value in sorted(zip(keys,values))]
        
-    if step_Num == 0:
-        keys = list(final_state_prob_dict.keys())
-        values = list(final_state_prob_dict.values())
-        final_state_prob_df.loc[step_Num] = [value for _,value in sorted(zip(keys,values))]                
+    if record_statewide_modes:
+        final_state_prob_df.loc[step_Num] = list(final_state_prob.values())                
+        final_equal_prob_df.loc[step_Num] = list(final_equal_prob.values())               
    
-        keys = list(final_equal_prob_dict.keys())
-        values = list(final_equal_prob_dict.values())
-        final_equal_prob_df.loc[step_Num] = [value for _,value in sorted(zip(keys,values))]                
-   
-        keys = list(final_dist_prob_dict.keys())
-        values = list(final_dist_prob_dict.values())
-        final_dist_prob_df.loc[step_Num] = [value for _,value in sorted(zip(keys,values))]                
-    
-    else:
-        final_state_prob_df.loc[step_Num % store_interval] = final_state_prob_df.loc[(step_Num % store_interval) -1]
-        for i in final_state_prob_dict.keys():
-            final_state_prob_df.at[step_Num % store_interval, i] = final_state_prob_dict[i]
-        
-        final_equal_prob_df.loc[step_Num % store_interval] = final_equal_prob_df.loc[(step_Num % store_interval) -1]
-        for i in final_equal_prob_dict.keys():
-            final_equal_prob_df.at[step_Num % store_interval, i] = final_equal_prob_dict[i]
+    if record_district_mode:
+        final_dist_prob_df.loc[step_Num] = list(final_dist_prob.values())                
 
-        final_dist_prob_df.loc[step_Num % store_interval] = final_dist_prob_df.loc[(step_Num % store_interval) -1]
-        for i in final_dist_prob_dict.keys():
-            final_dist_prob_df.at[step_Num % store_interval, i] = final_dist_prob_dict[i] 
- 
     #store plans     
-    if ((step_Num - last_step_stored) > 1000): 
+    if (step_Num - last_step_stored) == store_interval or step_Num == 0:          
         last_step_stored = step_Num
-        store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))
-        print("store new one!")
-
+        store_plans["Map{}".format(step_Num)] = store_plans["Index"].map(dict(step.assignment))               
+        print("stored new map!", "step num", step_Num)
+   
     step_Num += 1
 
 #output data
@@ -614,15 +532,14 @@ sen16_df.to_csv(DIR + "outputs/sen16_df_{}.csv".format(run_name), mode = 'a', he
 map_metric.to_csv(DIR + "outputs/map_metric_{}.csv".format(run_name), index = True)
 #vra data
 if total_steps <= store_interval:
-    final_state_prob_df.to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), index= False)
-    final_equal_prob_df.to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name),  index= False)
-    final_dist_prob_df.to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), index= False)
+    for score_df, score_df_name in zip(score_dfs, score_df_names):        
+        score_df.to_csv(DIR + "outputs/{}_{}.csv".format(score_df_name, run_name), index= False)
 else:  
-    final_state_prob_df.drop(-1).to_csv(DIR + "outputs/final_state_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-    final_equal_prob_df.drop(-1).to_csv(DIR + "outputs/final_equal_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-    final_dist_prob_df.drop(-1).to_csv(DIR + "outputs/final_dist_prob_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
+    for score_df, score_df_name in zip(score_dfs, score_df_names):      
+        score_df.to_csv(DIR + "outputs/{}_{}.csv".format(score_df_name, run_name), mode = 'a', header = False, index= False)
 ############# final print outs
 print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
+print("ave sec per step", (time.time() - start_time_total)/total_steps)
 print("total moves", count_moves)
 print("run name:", run_name)
 print("num steps", total_steps)

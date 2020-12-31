@@ -5,6 +5,10 @@ Created on Tue Jul 28 15:50:57 2020
 @author: darac
 """
 import random
+a = random.randint(0,10000000000)
+import networkx as nx
+from gerrychain.random import random
+random.seed(a)
 import csv
 import os
 import shutil
