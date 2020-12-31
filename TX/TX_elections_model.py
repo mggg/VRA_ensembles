@@ -5,7 +5,8 @@ Created on Thu Feb 13 12:19:57 2020
 @author: darac
 """
 import random
-a = random.randint(0,10000000000)
+#a = random.randint(0,10000000000)
+a = 10
 import networkx as nx
 from gerrychain.random import random
 random.seed(a)
@@ -64,10 +65,10 @@ pop_tol = .01 #U.S. Cong (deviation from ideal district population)
 run_name = 'Texas_neutral_run'
 start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
 effectiveness_cutoff = .6
-ensemble_inclusion = True
+ensemble_inclusion = False
 ensemble_inclusion_demo = False
 record_statewide_modes = True
-record_district_mode = False
+record_district_mode = True
 model_mode = 'statewide' #'district', 'equal', 'statewide'
 
 store_interval = 200  #how many Markov chain steps between data storage
@@ -123,6 +124,7 @@ state_gdf.columns = state_gdf_cols
 state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
+
 #build graph from geo_dataframe #####################################################
 graph = Graph.from_geodataframe(state_gdf)
 graph.add_data(state_gdf)
@@ -132,7 +134,7 @@ c_y = centroids.y
 for node in graph.nodes():
     graph.nodes[node]["C_X"] = c_x[node]
     graph.nodes[node]["C_Y"] = c_y[node]
-    
+#    
 #set up elections data structures ################################################
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
@@ -181,11 +183,12 @@ for elec_set in elec_sets:
             recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
 
 #precompute statewide EI and W1, W2, W3 for statewide/equal modes 
-black_weight_state, hisp_weight_state, neither_weight_state, black_weight_equal,\
-hisp_weight_equal, neither_weight_equal, black_pref_cands_prim_state, hisp_pref_cands_prim_state, \
-black_pref_cands_runoffs_state, hisp_pref_cands_runoffs_state\
-             = precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
-                runoff_elecs, elec_match_dict, min_cand_weights_dict, cand_race_dict)
+if record_statewide_modes:
+    black_weight_state, hisp_weight_state, neither_weight_state, black_weight_equal,\
+    hisp_weight_equal, neither_weight_equal, black_pref_cands_prim_state, hisp_pref_cands_prim_state, \
+    black_pref_cands_runoffs_state, hisp_pref_cands_runoffs_state\
+                     = precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
+                     runoff_elecs, elec_match_dict, min_cand_weights_dict, cand_race_dict)
 
 #precompute set-up for district mode, if used (need precinct level EI set up)
 #need to precompute all the column bases and dictionary for all (demog, election) pairs
@@ -289,7 +292,7 @@ def final_elec_model(partition):
         black_align_prim_dist, hisp_align_prim_dist = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
                                                       black_pref_cands_prim_dist, hisp_pref_cands_prim_dist, elec_match_dict, \
                                                       mean_prec_counts, geo_id)
-        
+
         final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist, black_pref_cands_runoffs_dist,\
                                hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
                                black_weight_dist, hisp_weight_dist, dist_elec_results, dist_changes,
@@ -309,9 +312,9 @@ def final_elec_model(partition):
          if record_district_mode else {key:"N/A" for key in sorted(dist_changes)}
          
     else:
-        final_state_prob = partition.parent["final_elec_model"][0]
-        final_equal_prob =  partition.parent["final_elec_model"][1]
-        final_dist_prob = partition.parent["final_elec_model"][2]
+        final_state_prob = partition.parent["final_elec_model"][0].copy()
+        final_equal_prob =  partition.parent["final_elec_model"][1].copy()
+        final_dist_prob = partition.parent["final_elec_model"][2].copy()
         
         for i in dist_changes:
             if record_statewide_modes:
@@ -403,6 +406,7 @@ ideal_population = total_population/num_districts
     
 if start_map == 'new_seed':
     start_map = recursive_tree_part(graph, range(num_districts), ideal_population, tot_pop, pop_tol, 3)    
+
 initial_partition = GeographicPartition(graph = graph, assignment = start_map, updaters = my_updaters)
 
 proposal = partial(
@@ -486,7 +490,8 @@ last_step_stored = 0
 start_time_total = time.time()
 
 print("chain starting")
-for step in chain:    
+for step in chain:  
+    print("step num", step_Num)
     final_state_prob, final_equal_prob, final_dist_prob = step["final_elec_model"]
             
     total_hisp_final_state, total_black_final_state, total_distinct_state = effective_districts(final_state_prob)
@@ -632,6 +637,7 @@ else:
 
 ############# final print outs ####################################################
 print("--- %s TOTAL seconds ---" % (time.time() - start_time_total))
+print("ave sec per step", (time.time() - start_time_total)/total_steps)
 print("total moves", count_moves)
 print("run name:", run_name)
 print("num steps", total_steps)
