@@ -31,7 +31,7 @@ import operator
 
 DIR = ''
 
-def precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
+def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1, EI_statewide, primary_elecs, \
                              runoff_elecs, elec_match_dict, min_cand_weights_dict, cand_race_dict):
     #map data storage: set up all dataframes to be filled   
     black_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
@@ -44,28 +44,33 @@ def precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide,
     hisp_pref_cands_runoffs_state = pd.DataFrame(columns = range(num_districts))
     hisp_pref_cands_runoffs_state["Election Set"] = elec_sets 
    
-    black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-    black_conf_W3_state["Election Set"] = elec_sets
-    hisp_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-    hisp_conf_W3_state["Election Set"] = elec_sets 
-    neither_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-    neither_conf_W3_state["Election Set"] = elec_sets
+    black_ei_prob = [EI_statewide.loc[((EI_statewide["Election"] == elec_set_dict[elec_set]['Primary']) & \
+                                       (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0] \
+                                       for elec_set in elec_sets]
+    
+    black_ei_conf = [prob_conf_conversion(x) for x in black_ei_prob]    
+    black_conf_W3_state = np.tile(black_ei_conf, (num_districts, 1)).transpose()
+    
+    hisp_ei_prob = [EI_statewide.loc[((EI_statewide["Election"] == elec_set_dict[elec_set]['Primary']) & 
+                                       (EI_statewide["Demog"] == 'HCVAP')), "prob"].values[0] 
+                                       for elec_set in elec_sets]
+    
+    hisp_ei_conf = [prob_conf_conversion(x) for x in hisp_ei_prob]    
+    hisp_conf_W3_state = np.tile(hisp_ei_conf, (num_districts, 1)).transpose()
+    
+    neither_ei_conf = [prob_conf_conversion(x*y) for x,y in zip(black_ei_prob, hisp_ei_prob)]
+    neither_conf_W3_state = np.tile(neither_ei_conf, (num_districts, 1)).transpose()
     
     #pre-compute W2 and W3 dfs for statewide/equal modes   
     for elec in primary_elecs + runoff_elecs:
         black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
         hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
-        black_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0]
-        hisp_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "prob"].values[0]   
       
         for district in range(num_districts):
             if elec in primary_elecs:           
-                black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-                black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_ei_prob)
+                black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand              
                 hisp_pref_cands_prim_state.at[hisp_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
-                hisp_conf_W3_state.at[hisp_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_ei_prob)                                             
-                neither_conf_W3_state.at[neither_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_ei_prob*black_ei_prob)                                             
-                
+              
             else:                        
                 black_pref_cands_runoffs_state.at[black_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand       
                 hisp_pref_cands_runoffs_state.at[hisp_pref_cands_runoffs_state["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand
@@ -76,51 +81,36 @@ def precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide,
     
     #compute final election weights (for statewide and equal scores) by taking product of W1, W2, and W3 for each election set and district
     #Note: because these are statewide weights, an election set will have the same weight across districts
-    black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
-    black_weight_state["Election Set"] = elec_sets
-    hisp_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_state.drop(["Election Set"], axis=1)*hisp_conf_W3_state.drop(["Election Set"], axis=1)    
-    hisp_weight_state["Election Set"] = elec_sets
-    neither_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_state.drop(["Election Set"], axis=1)*neither_conf_W3_state.drop(["Election Set"], axis=1)    
-    neither_weight_state["Election Set"] = elec_sets
+    black_weight_state = recency_W1*min_cand_black_W2_state*black_conf_W3_state
+    hisp_weight_state = recency_W1*min_cand_hisp_W2_state*hisp_conf_W3_state    
+    neither_weight_state = recency_W1*min_cand_neither_W2_state*neither_conf_W3_state
     
     #equal-score weights are all 1
-    black_weight_equal = pd.DataFrame(columns = range(num_districts))
-    black_weight_equal[0] = [1]*len(elec_sets)
-    hisp_weight_equal = pd.DataFrame(columns = range(num_districts))
-    hisp_weight_equal[0] = [1]*len(elec_sets)
-    neither_weight_equal = pd.DataFrame(columns = range(num_districts))
-    neither_weight_equal[0] = [1]*len(elec_sets)
-    for i in range(1, num_districts):
-        black_weight_equal[i] = 1
-        hisp_weight_equal[i] = 1
-        neither_weight_equal[i] = 1
-    black_weight_equal["Election Set"] = elec_sets
-    hisp_weight_equal["Election Set"] = elec_sets
-    neither_weight_equal["Election Set"] = elec_sets
+    black_weight_equal = np.ones((len(elec_sets), num_districts))
+    hisp_weight_equal = np.ones((len(elec_sets), num_districts))
+    neither_weight_equal = np.ones((len(elec_sets), num_districts))
     
     return black_weight_state, hisp_weight_state, neither_weight_state, black_weight_equal,\
         hisp_weight_equal, neither_weight_equal, black_pref_cands_prim_state, hisp_pref_cands_prim_state, \
         black_pref_cands_runoffs_state, hisp_pref_cands_runoffs_state
 
-def compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
+def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, partition, prec_draws_outcomes,\
                              geo_id, primary_elecs, runoff_elecs, elec_match_dict, bases, outcomes,\
                              recency_W1, cand_race_dict, min_cand_weights_dict):
+   
     black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
     black_pref_cands_prim_dist["Election Set"] = elec_sets
     hisp_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
     hisp_pref_cands_prim_dist["Election Set"] = elec_sets
-    
     #store runoff preferences for instances where minority-preferred candidate needs to switch between primary and runoff
     black_pref_cands_runoffs_dist = pd.DataFrame(columns = dist_changes)
     black_pref_cands_runoffs_dist["Election Set"] = elec_sets
     hisp_pref_cands_runoffs_dist = pd.DataFrame(columns = dist_changes)
     hisp_pref_cands_runoffs_dist["Election Set"] = elec_sets 
-    black_conf_W3_dist = pd.DataFrame(columns = dist_changes)
-    black_conf_W3_dist["Election Set"] = elec_sets
-    hisp_conf_W3_dist = pd.DataFrame(columns = dist_changes)
-    hisp_conf_W3_dist["Election Set"] = elec_sets  
-    neither_conf_W3_dist = pd.DataFrame(columns = dist_changes)
-    neither_conf_W3_dist["Election Set"] = elec_sets
+    
+    black_conf_W3_dist = np.empty((len(elec_sets),0), float)
+    hisp_conf_W3_dist = np.empty((len(elec_sets),0), float)
+    neither_conf_W3_dist = np.empty((len(elec_sets),0), float)
     
     for district in dist_changes:        
         state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
@@ -128,39 +118,51 @@ def compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec
         dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
         district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
         
-        for elec in primary_elecs + runoff_elecs:                    
-            HCVAP_support_elec = district_support_all[('HCVAP', elec)]
+        black_pref_prob_single_dist = []
+        hisp_pref_prob_single_dist = []
+        
+        for elec_set in elec_sets:                    
+            HCVAP_support_elec = district_support_all[('HCVAP', elec_set_dict[elec_set]['Primary'])]
             hisp_pref_cand_dist = max(HCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
             hisp_pref_prob_dist = HCVAP_support_elec[hisp_pref_cand_dist]
-                        
-            BCVAP_support_elec = district_support_all[('BCVAP', elec)]
+            hisp_pref_prob_single_dist.append(hisp_pref_prob_dist)   
+            
+            BCVAP_support_elec = district_support_all[('BCVAP', elec_set_dict[elec_set]['Primary'])]
             black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
             black_pref_prob_dist = BCVAP_support_elec[black_pref_cand_dist]
+            black_pref_prob_single_dist.append(black_pref_prob_dist)
             
-            #computing preferred candidate and confidence in that choice gives is weight 3        
-            if elec in primary_elecs:
-                black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
-                black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_pref_prob_dist)
-                hisp_pref_cands_prim_dist.at[hisp_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand_dist
-                hisp_conf_W3_dist.at[hisp_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_pref_prob_dist)        
-                neither_conf_W3_dist.at[neither_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(hisp_pref_prob_dist*black_pref_prob_dist)        
+            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_set, district] = black_pref_cand_dist
+            hisp_pref_cands_prim_dist.at[hisp_pref_cands_prim_dist["Election Set"] == elec_set, district] = hisp_pref_cand_dist      
+            
+            if 'Runoff' in elec_set_dict[elec_set].keys():
+                HCVAP_support_elec = district_support_all[('HCVAP', elec_set_dict[elec_set]['Runoff'])]
+                hisp_pref_cand_dist = max(HCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
+                hisp_pref_cands_runoffs_dist.at[hisp_pref_cands_runoffs_dist["Election Set"] == elec_set, district] = hisp_pref_cand_dist
+           
+                BCVAP_support_elec = district_support_all[('BCVAP', elec_set_dict[elec_set]['Runoff'])]
+                black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]                               
+                black_pref_cands_runoffs_dist.at[black_pref_cands_runoffs_dist["Election Set"] == elec_set, district] = black_pref_cand_dist
+        
+        black_pref_conf_single_dist = [prob_conf_conversion(x) for x in black_pref_prob_single_dist]
+        black_conf_W3_dist = np.append(black_conf_W3_dist, np.array([black_pref_conf_single_dist]).transpose(), axis = 1) 
+        
+        hisp_pref_conf_single_dist = [prob_conf_conversion(x) for x in hisp_pref_prob_single_dist]
+        hisp_conf_W3_dist = np.append(hisp_conf_W3_dist, np.array([hisp_pref_conf_single_dist]).transpose(), axis = 1) 
                 
-            else:
-                black_pref_cands_runoffs_dist.at[black_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
-                hisp_pref_cands_runoffs_dist.at[hisp_pref_cands_runoffs_dist["Election Set"] == elec_match_dict[elec], district] = hisp_pref_cand_dist
-              
+        neither_pref_conf_single_dist = [prob_conf_conversion(x*y) for x,y in zip(black_pref_prob_single_dist,hisp_pref_prob_single_dist)]
+        neither_conf_W3_dist = np.append(neither_conf_W3_dist, np.array([neither_pref_conf_single_dist]).transpose(), axis = 1) 
+                       
     #compute W2 ("in-group"-minority-preference weight)        
     min_cand_black_W2_dist, min_cand_hisp_W2_dist, min_cand_neither_W2_dist = compute_W2(elec_sets, \
           dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, hisp_pref_cands_prim_dist, cand_race_dict)
     ################################################################################    
     #compute final election weights per district
-    black_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_dist.drop(["Election Set"], axis=1)*black_conf_W3_dist.drop(["Election Set"], axis=1)
-    black_weight_dist["Election Set"] = elec_sets
-    hisp_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_hisp_W2_dist.drop(["Election Set"], axis=1)*hisp_conf_W3_dist.drop(["Election Set"], axis=1)    
-    hisp_weight_dist["Election Set"] = elec_sets
-    neither_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_neither_W2_dist.drop(["Election Set"], axis=1)*neither_conf_W3_dist.drop(["Election Set"], axis=1)    
-    neither_weight_dist["Election Set"] = elec_sets
-    
+    recency_W1 = recency_W1.copy()[:, dist_changes]
+    black_weight_dist = recency_W1*min_cand_black_W2_dist*black_conf_W3_dist
+    hisp_weight_dist = recency_W1*min_cand_hisp_W2_dist*hisp_conf_W3_dist    
+    neither_weight_dist = recency_W1*min_cand_neither_W2_dist*neither_conf_W3_dist
+        
     return black_weight_dist, hisp_weight_dist, neither_weight_dist, black_pref_cands_prim_dist, \
             black_pref_cands_runoffs_dist, hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist
                                      
@@ -169,29 +171,31 @@ def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_
                          black_pref_cands_prim, hisp_pref_cands_prim, elec_match_dict, \
                          mean_prec_counts, geo_id):
     
-    black_align_prim = pd.DataFrame(columns = dist_changes)
-    black_align_prim["Election Set"] = elec_sets
-    hisp_align_prim = pd.DataFrame(columns = dist_changes)
-    hisp_align_prim["Election Set"] = elec_sets
-
+    black_align_prim = np.empty((len(elec_sets),0), float)
+    hisp_align_prim = np.empty((len(elec_sets),0), float)
+    
     for district in dist_changes:        
         state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
         dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])        
         cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
+                
+        black_align_dist = [sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/\
+                            (sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + \
+                             sum(cand_counts_dist["HCVAP"+ '.' + black_pref_cand]) + \
+                             sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + \
+                             sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand])) for \
+                             black_pref_cand in black_pref_cands_prim[district]]
         
-        for elec in primary_elecs:                                
-            black_pref_cand = black_pref_cands_prim.loc[black_pref_cands_prim["Election Set"] == elec_match_dict[elec], district].values[0]
-            hisp_pref_cand = hisp_pref_cands_prim.loc[hisp_pref_cands_prim["Election Set"] == elec_match_dict[elec], district].values[0]    
-          
-            black_align_prim.at[black_align_prim["Election Set"] == elec_match_dict[elec], district] = \
-            sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/(sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["HCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand]))                       
-            
-            hisp_align_prim.at[hisp_align_prim["Election Set"] == elec_match_dict[elec], district] = \
-            sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand])/(sum(cand_counts_dist["BCVAP"+ '.' + hisp_pref_cand]) + sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand]) + sum(cand_counts_dist["WCVAP"+ '.' + hisp_pref_cand]) + sum(cand_counts_dist["OCVAP"+ '.' + hisp_pref_cand]))
-                            
-    black_align_prim =  black_align_prim.drop(['Election Set'], axis = 1)
-    hisp_align_prim =  hisp_align_prim.drop(['Election Set'], axis = 1)  
-
+        hisp_align_dist = [sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand])/\
+                            (sum(cand_counts_dist["BCVAP"+ '.' + hisp_pref_cand]) + \
+                             sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand]) + \
+                             sum(cand_counts_dist["WCVAP"+ '.' + hisp_pref_cand]) + \
+                             sum(cand_counts_dist["OCVAP"+ '.' + hisp_pref_cand])) for \
+                             hisp_pref_cand in hisp_pref_cands_prim[district]]
+        
+        black_align_prim = np.append(black_align_prim, np.array([black_align_dist]).transpose(), axis = 1)                
+        hisp_align_prim = np.append(hisp_align_prim, np.array([hisp_align_dist]).transpose(), axis = 1)                
+    
     return black_align_prim, hisp_align_prim   
      
     
@@ -201,20 +205,18 @@ def prob_conf_conversion(cand_prob):
     return cand_conf
 
 def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoffs,\
-                 hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_df, \
-                 black_weight_df, hisp_weight_df, dist_elec_results, dist_changes,
+                 hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_array, \
+                 black_weight_array, hisp_weight_array, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, \
-                 mode, logit_params, logit = False, single_map = False):
+                 mode, logit_params, logit = False):
     #determine if election set accrues points by district for Black and Latino voters
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
     runoff_winners = map_winners[map_winners["Election Type"] == 'Runoff'].reset_index(drop = True)
         
-    black_pref_wins = pd.DataFrame(columns = range(num_districts))
-    black_pref_wins["Election Set"] = elec_sets
-    hisp_pref_wins = pd.DataFrame(columns = range(num_districts))
-    hisp_pref_wins["Election Set"] = elec_sets
+    black_pref_wins = np.empty((len(elec_sets),0), float)
+    hisp_pref_wins = np.empty((len(elec_sets),0), float)
     
     primary_second_df = pd.DataFrame(columns = range(num_districts))
     primary_second_df["Election Set"] = elec_sets
@@ -279,7 +281,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                         party_general_winner, black_pref_prim_rank,runoff_winner_list, \
                         runoff_black_pref, primary_races)]
         
-        black_pref_wins[dist] = black_accrue
+        black_pref_wins = np.append(black_pref_wins, np.array([black_accrue]).transpose(), axis = 1)
 
         hisp_accrue = [(prim_win == hpc and party_win == 'D') if run_race == None else \
                        ((hpp_rank < 3 and run_win == runhp and party_win == 'D') or \
@@ -289,25 +291,26 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                        party_general_winner, hisp_pref_prim_rank,runoff_winner_list, \
                        runoff_hisp_pref, primary_races)]
                        
-        hisp_pref_wins[dist] = hisp_accrue
-        
-        
-    neither_pref_wins = (1-black_pref_wins.drop(['Election Set'], axis = 1))*(1-hisp_pref_wins.drop(['Election Set'], axis = 1))
-    neither_pref_wins["Election Set"] = elec_sets
-    #election set weight's number of points are accrued if Black or Latino preferred candidate(s) win (or proxies do)
-    neither_points_accrued = neither_weight_df.drop(['Election Set'], axis = 1)*neither_pref_wins.drop(['Election Set'], axis = 1)  
-    neither_points_accrued["Election Set"] = elec_sets
-    black_points_accrued = black_weight_df.drop(['Election Set'], axis = 1)*black_pref_wins.drop(['Election Set'], axis = 1)  
-    black_points_accrued["Election Set"] = elec_sets
-    hisp_points_accrued = hisp_weight_df.drop(['Election Set'], axis = 1)*hisp_pref_wins.drop(['Election Set'], axis = 1)      
-    hisp_points_accrued["Election Set"] = elec_sets
+        hisp_pref_wins = np.append(hisp_pref_wins, np.array([hisp_accrue]).transpose(), axis = 1)
+               
+    neither_pref_wins = (1-black_pref_wins)*(1-hisp_pref_wins)
     
+    if len(black_weight_array[0]) > 2: 
+        black_weight_array = black_weight_array[:, dist_changes]
+        hisp_weight_array = hisp_weight_array[:, dist_changes]
+        neither_weight_array = neither_weight_array[:, dist_changes]
+        
+    #election set weight's number of points are accrued if Black or Latino preferred candidate(s) win (or proxies do)
+    neither_points_accrued = neither_weight_array*neither_pref_wins
+    black_points_accrued = black_weight_array*black_pref_wins
+    hisp_points_accrued = hisp_weight_array*hisp_pref_wins    
+ 
 ########################################################################################
     #Compute district probabilities: Black, Latino, Neither and Overlap 
-    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum((black_points_accrued.drop(['Election Set'], axis = 1)*black_align_prim)[i])/sum(black_weight_df[i]) for i in dist_changes]
-    hisp_vra_prob = [0 if sum(hisp_weight_df[i])  == 0 else sum((hisp_points_accrued.drop(['Election Set'], axis = 1)*hisp_align_prim)[i])/sum(hisp_weight_df[i]) for i in dist_changes]         
-    neither_vra_prob = [0 if sum(neither_weight_df[i])  == 0 else sum(neither_points_accrued[i])/sum(neither_weight_df[i]) for i in dist_changes]   
-               
+    black_vra_prob = list(np.sum(black_points_accrued*black_align_prim, axis = 0)/np.sum(black_weight_array, axis = 0))             
+    hisp_vra_prob = list(np.sum(hisp_points_accrued*hisp_align_prim, axis = 0)/np.sum(hisp_weight_array, axis = 0))             
+    neither_vra_prob = list(np.sum(neither_points_accrued, axis = 0)/np.sum(neither_weight_array, axis = 0))             
+
     #feed through logit:
     if logit == True:
         logit_coef_black = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Black'), 'coef'].values[0]
@@ -336,43 +339,36 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
 #    final_overlap = ["N/A"]*len(dist_changes)
 #    final_black_prob = black_vra_prob #[black_vra_prob[i] - final_overlap[i] for i in range(len(dist_changes))]
 #    final_hisp_prob = hisp_vra_prob
-    
-    if single_map:
-        return  dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap))), \
-                black_pref_wins, hisp_pref_wins, neither_pref_wins, black_points_accrued, hisp_points_accrued, \
-                neither_points_accrued, primary_second_df, prim_share_hpc, prim_share_bpc, party_gen_winner
-    else:
-        return dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
+
+    return dict(zip(dist_changes, zip(final_hisp_prob, final_black_prob, final_neither, final_overlap)))
     
  
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df, hisp_pref_cands_df, \
                cand_race_dict):
-    min_cand_black_W2 = pd.DataFrame(columns = districts)
-    min_cand_black_W2["Election Set"] = elec_sets
-    min_cand_hisp_W2 = pd.DataFrame(columns = districts)
-    min_cand_hisp_W2["Election Set"] = elec_sets
-    min_cand_neither_W2 = pd.DataFrame(columns = districts)
-    min_cand_neither_W2["Election Set"] = elec_sets
-
+    
+    min_cand_black_W2 = np.empty((len(elec_sets),0), float)
+    min_cand_hisp_W2 = np.empty((len(elec_sets),0), float)
+    min_cand_neither_W2 = np.empty((len(elec_sets),0), float)
+    
     for dist in districts:
         black_pref = list(black_pref_cands_df[dist])
 
         black_pref_race = [cand_race_dict[bp] for bp in black_pref]
         black_cand_weight = [min_cand_weights_dict["Relevant Minority"] if "Black" in bpr else \
                              min_cand_weights_dict["Other"] for bpr in black_pref_race]
-        min_cand_black_W2[dist] = black_cand_weight
+        min_cand_black_W2 = np.append(min_cand_black_W2, np.array([black_cand_weight]).transpose(), axis = 1)
         
         hisp_pref = list(hisp_pref_cands_df[dist])
         hisp_pref_race = [cand_race_dict[hp] for hp in hisp_pref]
         hisp_cand_weight = [min_cand_weights_dict["Relevant Minority"] if "Hispanic" in hpr else \
                              min_cand_weights_dict["Other"] for hpr in hisp_pref_race]
-        min_cand_hisp_W2[dist] = hisp_cand_weight
-    
-         
+        min_cand_hisp_W2 = np.append(min_cand_hisp_W2, np.array([hisp_cand_weight]).transpose(), axis = 1)
+       
         neither_cand_weight = [min_cand_weights_dict['Relevant Minority'] if ('Hispanic' in hpr and 'Black' in bpr) else\
         min_cand_weights_dict['Other'] if ('Hispanic' not in hpr and 'Black' not in bpr) else \
            min_cand_weights_dict['Partial '] for bpr,hpr in zip(black_pref_race, hisp_pref_race)]
-        min_cand_neither_W2[dist] = neither_cand_weight
+        min_cand_neither_W2 = np.append(min_cand_neither_W2, np.array([neither_cand_weight]).transpose(), axis = 1)
+    
         
     return min_cand_black_W2, min_cand_hisp_W2, min_cand_neither_W2
 

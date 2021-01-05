@@ -61,6 +61,43 @@ def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1
         
     return black_weight_state, black_weight_equal, black_pref_cands_prim_state 
 
+
+def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, partition, prec_draws_outcomes,\
+                             geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
+                             recency_W1, cand_race_dict, min_cand_weights_dict):
+    black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
+    black_pref_cands_prim_dist["Election Set"] = elec_sets
+    black_conf_W3_dist = np.empty((len(elec_sets),0), float)
+    
+    for district in dist_changes:        
+        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
+        dist_prec_list = list(state_gdf[state_gdf["New Map"] == district][geo_id])
+        dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
+        district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
+        
+        black_pref_prob_single_dist = []
+        
+        for elec_set in elec_sets:
+            BCVAP_support_elec = district_support_all[('BCVAP', elec_set_dict[elec_set]['Primary'])]
+            black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
+            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_set, district] = black_pref_cand_dist            
+            black_pref_prob_dist = BCVAP_support_elec[black_pref_cand_dist]
+            black_pref_prob_single_dist.append(black_pref_prob_dist)
+            
+                        
+        black_pref_conf_single_dist = [prob_conf_conversion(x) for x in black_pref_prob_single_dist]
+        black_conf_W3_dist = np.append(black_conf_W3_dist, np.array([black_pref_conf_single_dist]).transpose(), axis = 1) 
+                  
+    #compute W2 ("in-group"-minority-preference weight)        
+    min_cand_black_W2_dist = compute_W2(elec_sets, dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, cand_race_dict)
+   
+    ################################################################################    
+    #compute final election weights per district
+    recency_W1 = recency_W1.copy()[:, dist_changes]
+    black_weight_dist = recency_W1*min_cand_black_W2_dist*black_conf_W3_dist
+    
+    return black_weight_dist, black_pref_cands_prim_dist
+           
 def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
                          black_pref_cands_prim, elec_match_dict, \
                          mean_prec_counts, geo_id):
@@ -81,43 +118,6 @@ def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_
         black_align_prim = np.append(black_align_prim, np.array([black_align_dist]).transpose(), axis = 1)                
     
     return black_align_prim
-
-def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, partition, prec_draws_outcomes,\
-                             geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
-                             recency_W1, cand_race_dict, min_cand_weights_dict):
-    black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
-    black_pref_cands_prim_dist["Election Set"] = elec_sets
-    black_conf_W3_dist = np.empty((len(elec_sets),0), float)
-    
-    for district in dist_changes:        
-        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
-        dist_prec_list = list(state_gdf[state_gdf["New Map"] == district][geo_id])
-        dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
-        district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
-        
-        black_pref_prob_single_dist = []
-        
-        for elec_set in elec_sets:
-            BCVAP_support_elec = district_support_all[('BCVAP', elec_set_dict[elec_set]['Primary'])]
-            black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
-            black_pref_prob_dist = BCVAP_support_elec[black_pref_cand_dist]
-            
-            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_set, district] = black_pref_cand_dist
-            black_pref_prob_single_dist.append(black_pref_prob_dist)
-            
-        black_pref_conf_single_dist = [prob_conf_conversion(x) for x in black_pref_prob_single_dist]
-        black_conf_W3_dist = np.append(black_conf_W3_dist, np.array([black_pref_conf_single_dist]).transpose(), axis = 1) 
-                  
-    #compute W2 ("in-group"-minority-preference weight)        
-    min_cand_black_W2_dist = compute_W2(elec_sets, dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, cand_race_dict)
-   
-    ################################################################################    
-    #compute final election weights per district
-    recency_W1 = recency_W1.copy()[:, dist_changes]
-    black_weight_dist = recency_W1*min_cand_black_W2_dist*black_conf_W3_dist
-    
-    return black_weight_dist, black_pref_cands_prim_dist
-           
            
 def prob_conf_conversion(cand_prob):
     #parameters chosen to be 0-ish confidence until 50% then rapid ascenion to high confidence
