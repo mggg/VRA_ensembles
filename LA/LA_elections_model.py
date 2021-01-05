@@ -251,13 +251,13 @@ def final_elec_model(partition):
         final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
                                 black_weight_state, dist_elec_results, dist_changes,\
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                                black_align_prim_state, "statewide", logit_params, logit = True, single_map = False)
+                                black_align_prim_state, "statewide", logit_params, logit = True)
         
         #district probability distribution: equal
         final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
                                 black_weight_equal, dist_elec_results, dist_changes,
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                                black_align_prim_state, "equal", logit_params, logit = True, single_map = False)
+                                black_align_prim_state, "equal", logit_params, logit = True)
     
         
     if record_district_mode: 
@@ -273,7 +273,7 @@ def final_elec_model(partition):
         final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist,
                                black_weight_dist, dist_elec_results, dist_changes,
                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                               black_align_prim_dist, 'district', logit_params, logit = True, single_map = False)
+                               black_align_prim_dist, 'district', logit_params, logit = True)
 
     #new vector of probability distributions-by-district is the same as last ReCom step, 
     #except in 2 changed districts 

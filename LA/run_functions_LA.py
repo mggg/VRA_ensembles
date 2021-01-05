@@ -128,7 +128,7 @@ def compute_final_dist(map_winners, black_pref_cands_df,
                  black_weight_array, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict, black_align_prim, \
-                 mode, logit_params, logit = False, single_map = False):
+                 mode, logit_params, logit = False):
     #determine if election set accrues points by district for black 
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
@@ -190,11 +190,7 @@ def compute_final_dist(map_winners, black_pref_cands_df,
    
     not_effect_vra_prob = [1-i for i in black_vra_prob]
     
-    if single_map:
-        return  dict(zip(dist_changes, zip(black_vra_prob, not_effect_vra_prob))), \
-                black_pref_wins, black_points_accrued, primary_second_df, black_align_prim
-    else:
-        return dict(zip(dist_changes, zip(black_vra_prob, not_effect_vra_prob)))
+    return dict(zip(dist_changes, zip(black_vra_prob, not_effect_vra_prob)))
     
  
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,\
