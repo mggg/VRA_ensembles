@@ -6,6 +6,7 @@ Created on Thu Feb 13 12:19:57 2020
 """
 import random
 a = random.randint(0,10000000000)
+a = 10
 import networkx as nx
 from gerrychain.random import random
 random.seed(a)
@@ -64,7 +65,7 @@ pop_tol = .01 #U.S. Cong (deviation from ideal district population)
 run_name = 'Texas_neutral_run'
 start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
 effectiveness_cutoff = .6
-ensemble_inclusion = False
+ensemble_inclusion = True
 ensemble_inclusion_demo = False
 record_statewide_modes = True
 record_district_mode = False

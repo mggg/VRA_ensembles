@@ -55,18 +55,18 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from run_functions_LA import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
+from run_functions_LA_speedup import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
 cand_pref_all_draws_outcomes, compute_district_weights, precompute_state_weights, compute_align_scores
 from ast import literal_eval
 #############################################################################################################
 
 #user input parameters ######################################################
-total_steps = 10
+total_steps = 1000
 pop_tol = .01  
 run_name = 'LA_neutral_Cong_run' 
 start_map = 'CD' #SEND, CD or 'new_seed'
 effectiveness_cutoff = .65
-ensemble_inclusion = True
+ensemble_inclusion = False
 record_statewide_modes = True
 record_district_mode = True
 model_mode = 'statewide' #'district', 'equal', 'statewide'
@@ -161,18 +161,15 @@ min_cand_weights_dict = {key:min_cand_weights.to_dict()[key][0] for key in  min_
 
 ########################################## pre-compute as much as possible for elections updater ##########
 #precompute election recency weights W1 for all scores
-recency_W1 = pd.DataFrame(columns = range(num_districts))
-recency_W1["Election Set"] = elec_sets
-for elec_set in elec_sets:
-        elec_year = elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str)
-        for dist in range(num_districts):
-            recency_W1.at[recency_W1["Election Set"] == elec_set, dist] = recency_weights[elec_year][0]
-  
-
+elec_years = [elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str) \
+              for elec_set in elec_sets]
+recency_scores = [recency_weights[elec_year][0] for elec_year in elec_years]
+recency_W1 = np.tile(recency_scores, (num_districts, 1)).transpose()
+      
 #precompute statewide EI and W1, W2, W3 for statewide/equal modes 
 if record_statewide_modes:
     black_weight_state,  black_weight_equal, black_pref_cands_prim_state \
-                     = precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
+                     = precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1, EI_statewide, primary_elecs, \
                        elec_match_dict, min_cand_weights_dict, cand_race_dict)
 
 #precompute set-up for district mode, if used (need precinct level EI set up)
@@ -222,7 +219,8 @@ def final_elec_model(partition):
         dict2 = dict(partition.assignment)
         differences = set([dict1[k] for k in dict1.keys() if dict1[k] != dict2[k]]).union(set([dict2[k] for k in dict2.keys() if dict1[k] != dict2[k]]))
         
-    dist_changes = range(num_districts) if partition.parent is None else differences
+        
+    dist_changes = range(num_districts) if partition.parent is None else sorted(differences)
    
     dist_elec_results = {}
     order = [x for x in partition.parts]
@@ -246,7 +244,7 @@ def final_elec_model(partition):
     #and final probability distributions
     if record_statewide_modes: 
         black_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                        black_pref_cands_prim_state,  elec_match_dict, mean_prec_counts, geo_id)
+                                                        black_pref_cands_prim_state, elec_match_dict, mean_prec_counts, geo_id)
        
     
     #district probability distribution: statewide
@@ -261,12 +259,10 @@ def final_elec_model(partition):
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
                                 black_align_prim_state, "equal", logit_params, logit = True, single_map = False)
     
-    
-    
-    
+        
     if record_district_mode: 
         black_weight_dist, black_pref_cands_prim_dist \
-                                 = compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
+                                 = compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, partition, prec_draws_outcomes,\
                                  geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
                                  recency_W1, cand_race_dict, min_cand_weights_dict)
         

@@ -31,89 +31,90 @@ import operator
 
 DIR = ''
 
-def precompute_state_weights(num_districts, elec_sets, recency_W1, EI_statewide, primary_elecs, \
+def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1, EI_statewide, primary_elecs, \
                              elec_match_dict, min_cand_weights_dict, cand_race_dict):
     #map data storage: set up all dataframes to be filled   
     black_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
     black_pref_cands_prim_state["Election Set"] = elec_sets  
-    black_conf_W3_state = pd.DataFrame(columns = range(num_districts))
-    black_conf_W3_state["Election Set"] = elec_sets
     
     #pre-compute W2 and W3 dfs for statewide/equal modes   
+    black_ei_prob = [EI_statewide.loc[((EI_statewide["Election"] == elec_set_dict[elec_set]['Primary']) & \
+                                       (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0] \
+                                       for elec_set in elec_sets]
+    
+    black_ei_conf = [prob_conf_conversion(x) for x in black_ei_prob]    
+    black_conf_W3_state = np.tile(black_ei_conf, (num_districts, 1)).transpose()
+    
     for elec in primary_elecs:
-        black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
-        black_ei_prob = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "prob"].values[0]
-       
+        black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]       
+        
         for district in range(num_districts):        
             black_pref_cands_prim_state.at[black_pref_cands_prim_state["Election Set"] == elec_match_dict[elec], district] = black_pref_cand
-            black_conf_W3_state.at[black_conf_W3_state["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_ei_prob)                
                   
     min_cand_black_W2_state = compute_W2(elec_sets, range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, cand_race_dict)
 
     #compute final election weights (for statewide and equal scores) by taking product of W1, W2, and W3 for each election set and district
     #Note: because these are statewide weights, an election set will have the same weight across districts
-    black_weight_state = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_state.drop(["Election Set"], axis=1)*black_conf_W3_state.drop(["Election Set"], axis=1)
-    black_weight_state["Election Set"] = elec_sets
-    
+    black_weight_state = recency_W1*min_cand_black_W2_state*black_conf_W3_state
     #equal-score weights are all 1
-    black_weight_equal = pd.DataFrame(columns = range(num_districts))
-    black_weight_equal[0] = [1]*len(elec_sets)
-    for i in range(1, num_districts):
-        black_weight_equal[i] = 1  
-    black_weight_equal["Election Set"] = elec_sets
-    
-    return black_weight_state,  black_weight_equal, black_pref_cands_prim_state 
+    black_weight_equal = np.ones((len(elec_sets), num_districts))
+        
+    return black_weight_state, black_weight_equal, black_pref_cands_prim_state 
 
 def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
                          black_pref_cands_prim, elec_match_dict, \
                          mean_prec_counts, geo_id):
-    
-    black_align_prim = pd.DataFrame(columns = dist_changes)
-    black_align_prim["Election Set"] = elec_sets
+       
+    black_align_prim = np.empty((len(elec_sets),0), float)
 
     for district in dist_changes:        
         state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
         dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])        
         cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
         
-        for elec in primary_elecs:                                
-            black_pref_cand = black_pref_cands_prim.loc[black_pref_cands_prim["Election Set"] == elec_match_dict[elec], district].values[0]      
-            black_align_prim.at[black_align_prim["Election Set"] == elec_match_dict[elec], district] = \
-            sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/(sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand]))                       
-                                        
-    black_align_prim =  black_align_prim.drop(['Election Set'], axis = 1)
+        black_align_dist = [sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/\
+                            (sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + \
+                             sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + \
+                             sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand])) for \
+                             black_pref_cand in black_pref_cands_prim[district]]
+        
+        black_align_prim = np.append(black_align_prim, np.array([black_align_dist]).transpose(), axis = 1)                
+    
     return black_align_prim
 
-def compute_district_weights(dist_changes, elec_sets, state_gdf, partition, prec_draws_outcomes,\
+def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, partition, prec_draws_outcomes,\
                              geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
                              recency_W1, cand_race_dict, min_cand_weights_dict):
     black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
     black_pref_cands_prim_dist["Election Set"] = elec_sets
-    black_conf_W3_dist = pd.DataFrame(columns = dist_changes)
-    black_conf_W3_dist["Election Set"] = elec_sets
+    black_conf_W3_dist = np.empty((len(elec_sets),0), float)
     
     for district in dist_changes:        
         state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
-        dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])
+        dist_prec_list = list(state_gdf[state_gdf["New Map"] == district][geo_id])
         dist_prec_indices = state_gdf.index[state_gdf[geo_id].isin(dist_prec_list)].tolist()
         district_support_all = cand_pref_outcome_sum(prec_draws_outcomes, dist_prec_indices, bases, outcomes)
         
-        for elec in primary_elecs:                                           
-            BCVAP_support_elec = district_support_all[('BCVAP', elec)]
+        black_pref_prob_single_dist = []
+        
+        for elec_set in elec_sets:
+            BCVAP_support_elec = district_support_all[('BCVAP', elec_set_dict[elec_set]['Primary'])]
             black_pref_cand_dist = max(BCVAP_support_elec.items(), key=operator.itemgetter(1))[0]
             black_pref_prob_dist = BCVAP_support_elec[black_pref_cand_dist]
             
-            #computing preferred candidate and confidence in that choice gives is weight 3        
-            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_match_dict[elec], district] = black_pref_cand_dist
-            black_conf_W3_dist.at[black_conf_W3_dist["Election Set"] == elec_match_dict[elec], district] = prob_conf_conversion(black_pref_prob_dist)           
-              
+            black_pref_cands_prim_dist.at[black_pref_cands_prim_dist["Election Set"] == elec_set, district] = black_pref_cand_dist
+            black_pref_prob_single_dist.append(black_pref_prob_dist)
+            
+        black_pref_conf_single_dist = [prob_conf_conversion(x) for x in black_pref_prob_single_dist]
+        black_conf_W3_dist = np.append(black_conf_W3_dist, np.array([black_pref_conf_single_dist]).transpose(), axis = 1) 
+                  
     #compute W2 ("in-group"-minority-preference weight)        
     min_cand_black_W2_dist = compute_W2(elec_sets, dist_changes, min_cand_weights_dict, black_pref_cands_prim_dist, cand_race_dict)
    
     ################################################################################    
     #compute final election weights per district
-    black_weight_dist = recency_W1.drop(["Election Set"], axis=1)*min_cand_black_W2_dist.drop(["Election Set"], axis=1)*black_conf_W3_dist.drop(["Election Set"], axis=1)
-    black_weight_dist["Election Set"] = elec_sets
+    recency_W1 = recency_W1.copy()[:, dist_changes]
+    black_weight_dist = recency_W1*min_cand_black_W2_dist*black_conf_W3_dist
     
     return black_weight_dist, black_pref_cands_prim_dist
            
@@ -124,16 +125,15 @@ def prob_conf_conversion(cand_prob):
     return cand_conf
 
 def compute_final_dist(map_winners, black_pref_cands_df,
-                 black_weight_df, dist_elec_results, dist_changes,
+                 black_weight_array, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict, black_align_prim, \
                  mode, logit_params, logit = False, single_map = False):
     #determine if election set accrues points by district for black 
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
-        
-    black_pref_wins = pd.DataFrame(columns = range(num_districts))
-    black_pref_wins["Election Set"] = elec_sets
+           
+    black_pref_wins = np.empty((len(elec_sets),0), float)
 
     primary_second_df = pd.DataFrame(columns = range(num_districts))
     primary_second_df["Election Set"] = elec_sets
@@ -169,16 +169,19 @@ def compute_final_dist(map_winners, black_pref_cands_df,
                         ((primary_race_share_dict[prim_race][bpc]) > .5 or (bpp_rank < 3 and party_win == 'D') or (bpp_rank == 1 and party_win == None))
                         for bpc, prim_win, party_win, bpp_rank, prim_race \
                         in zip(black_pref_cands, primary_winner_list, party_general_winner, \
-                               black_pref_prim_rank, primary_races)]
-        
-        black_pref_wins[dist] = black_accrue
-
-    black_points_accrued = black_weight_df.drop(['Election Set'], axis = 1)*black_pref_wins.drop(['Election Set'], axis = 1)  
-    black_points_accrued["Election Set"] = elec_sets
+                               black_pref_prim_rank, primary_races)]        
+        black_pref_wins = np.append(black_pref_wins, np.array([black_accrue]).transpose(), axis = 1)
     
+
+    #extract 2 dist_change columns from election weight array
+    if len(black_weight_array[0]) > 2: 
+        black_weight_array = black_weight_array[:, dist_changes]
+    
+    black_points_accrued = black_weight_array*black_pref_wins    
 ########################################################################################
     #Compute district probabilities: black, Latino, neither and overlap 
-    black_vra_prob = [0 if sum(black_weight_df[i]) == 0 else sum((black_points_accrued.drop(['Election Set'], axis = 1)*black_align_prim)[i])/sum(black_weight_df[i]) for i in dist_changes]               
+    black_vra_prob = list(np.sum(black_points_accrued*black_align_prim, axis = 0)/np.sum(black_weight_array, axis = 0))             
+    
     #feed through logit:
     if logit == True:
         logit_coef_black = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Black'), 'coef'].values[0]
@@ -196,17 +199,17 @@ def compute_final_dist(map_winners, black_pref_cands_df,
  
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,\
                cand_race_dict):
-    min_cand_black_W2 = pd.DataFrame(columns = districts)
-    min_cand_black_W2["Election Set"] = elec_sets
-
+    
+    min_cand_black_W2 = np.empty((len(elec_sets),0), float)
     for dist in districts:
         black_pref = list(black_pref_cands_df[dist])
-
+        
         black_pref_race = [cand_race_dict[bp] for bp in black_pref]
         black_cand_weight = [min_cand_weights_dict["Relevant Minority"] if "Black" in bpr else \
                              min_cand_weights_dict["Other"] for bpr in black_pref_race]
-        min_cand_black_W2[dist] = black_cand_weight
-                
+        
+        min_cand_black_W2 = np.append(min_cand_black_W2, np.array([black_cand_weight]).transpose(), axis = 1)
+    
     return min_cand_black_W2
 
 
