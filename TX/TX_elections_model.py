@@ -54,7 +54,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from run_functions_speed import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
+from run_functions import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
 cand_pref_all_draws_outcomes, precompute_state_weights, compute_district_weights, compute_align_scores
 from ast import literal_eval
 
@@ -67,7 +67,7 @@ effectiveness_cutoff = .6
 ensemble_inclusion = True
 ensemble_inclusion_demo = False
 record_statewide_modes = True
-record_district_mode = True
+record_district_mode = False
 model_mode = 'statewide' #'district', 'equal', 'statewide'
 
 store_interval = 200  #how many Markov chain steps between data storage
