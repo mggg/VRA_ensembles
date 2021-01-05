@@ -55,7 +55,7 @@ import scipy
 from scipy import stats
 import sys
 from functools import partial
-from run_functions_LA_speedup import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
+from run_functions_LA import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
 cand_pref_all_draws_outcomes, compute_district_weights, precompute_state_weights, compute_align_scores
 from ast import literal_eval
 #############################################################################################################
