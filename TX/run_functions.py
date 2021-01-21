@@ -328,11 +328,11 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     max_neither = [1 - max(black_vra_prob[i], hisp_vra_prob[i]) for i in range(len(dist_changes))]
     
     #uses ven diagram overlap/neither method 
-    final_neither = [round(min_neither[i],2) if neither_vra_prob[i] < min_neither[i] else round(max_neither[i],2) \
-                     if neither_vra_prob[i] > max_neither[i] else round(neither_vra_prob[i],2) for i in range(len(dist_changes))]    
-    final_overlap = [round(final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1,2) for i in range(len(dist_changes))]
-    final_black_prob = [round(black_vra_prob[i] - final_overlap[i],2) for i in range(len(dist_changes))]
-    final_hisp_prob = [round(hisp_vra_prob[i] - final_overlap[i],2) for i in range(len(dist_changes))]
+    final_neither = [round(min_neither[i],3) if neither_vra_prob[i] < min_neither[i] else round(max_neither[i],3) \
+                     if neither_vra_prob[i] > max_neither[i] else round(neither_vra_prob[i],3) for i in range(len(dist_changes))]    
+    final_overlap = [round(final_neither[i] + black_vra_prob[i] + hisp_vra_prob[i] - 1,3) for i in range(len(dist_changes))]
+    final_black_prob = [round(black_vra_prob[i] - final_overlap[i],3) for i in range(len(dist_changes))]
+    final_hisp_prob = [round(hisp_vra_prob[i] - final_overlap[i],3) for i in range(len(dist_changes))]
     
     #when fitting logit, comment in:
 #    final_neither = neither_vra_prob
