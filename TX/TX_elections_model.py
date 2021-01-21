@@ -6,6 +6,7 @@ Created on Thu Feb 13 12:19:57 2020
 """
 import random
 a = random.randint(0,10000000000)
+a = 10
 import networkx as nx
 from gerrychain.random import random
 random.seed(a)
@@ -66,9 +67,9 @@ start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
 effectiveness_cutoff = .6
 ensemble_inclusion = True
 ensemble_inclusion_demo = False
-record_statewide_modes = True
-record_district_mode = False
-model_mode = 'statewide' #'district', 'equal', 'statewide'
+record_statewide_modes = False
+record_district_mode = True
+model_mode = 'district' #'district', 'equal', 'statewide'
 
 store_interval = 200  #how many Markov chain steps between data storage
 
@@ -125,15 +126,15 @@ state_df = pd.DataFrame(state_gdf)
 state_df = state_df.drop(['geometry'], axis = 1)
 
 #build graph from geo_dataframe #####################################################
-graph = Graph.from_geodataframe(state_gdf)
-graph.add_data(state_gdf)
-centroids = state_gdf.centroid
-c_x = centroids.x
-c_y = centroids.y
-for node in graph.nodes():
-    graph.nodes[node]["C_X"] = c_x[node]
-    graph.nodes[node]["C_Y"] = c_y[node]
-    
+#graph = Graph.from_geodataframe(state_gdf)
+#graph.add_data(state_gdf)
+#centroids = state_gdf.centroid
+#c_x = centroids.x
+#c_y = centroids.y
+#for node in graph.nodes():
+#    graph.nodes[node]["C_X"] = c_x[node]
+#    graph.nodes[node]["C_Y"] = c_y[node]
+#    
 #set up elections data structures ################################################
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
@@ -599,11 +600,11 @@ for step in chain:
     gov18_df.loc[step_Num % store_interval] = [value for _,value in sorted(zip(keys,values))]    
                   
     if record_statewide_modes:
-        final_state_prob_df.loc[step_Num] = list(final_state_prob.values())                
-        final_equal_prob_df.loc[step_Num] = list(final_equal_prob.values())               
+        final_state_prob_df.loc[step_Num % store_interval] = list(final_state_prob.values())                
+        final_equal_prob_df.loc[step_Num % store_interval] = list(final_equal_prob.values())               
    
     if record_district_mode:
-        final_dist_prob_df.loc[step_Num] = list(final_dist_prob.values())                
+        final_dist_prob_df.loc[step_Num % store_interval] = list(final_dist_prob.values())                
 
     #store plans     
     if (step_Num - last_step_stored) == store_interval or step_Num == 0:          
