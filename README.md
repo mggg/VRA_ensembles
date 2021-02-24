@@ -19,7 +19,7 @@ All input files are in this code repository, except for 3 files that were too la
 * ***TX_logit_params***: Intercepts and coefficients for the best fit logit functions for the statewide, district and equal model scores.
 * ***recency_weights***: Election weights according to their years.
 * ***ingroup_weight***: Election weights according to whether the Latino (Black) prefferred candidate is Latino (Black).
-* ***statewide_rxc_EI_preferences***: Statewide EI results. Contains EI-predicted candidates of choice for Black, Latino, White and Other voters for each statewide election. Also listed are point estimates for level of support from these voters and proportion of EI draws that identified these candidates as the preferred candidates.
+* ***statewide_rxc_EI_preferences***: Statewide EI results. Contains EI-predicted candidates of choice for Black, Latino, White and Other voters for each statewide election. Also listed are point estimates for level of support from these voters and the proportion of EI draws that identified these candidates as the preferred candidates.
 
 * ***TX_VTDs***: The 2018 Texas VTD shapefile from The Texas Legislative Council. We have appended 2010 Census population data, ACS CVAP data for several years and election returns also from the Texas Legislative Council.
 
@@ -32,7 +32,7 @@ All input files are in this code repository, except for 3 files that were too la
 ### User Input Parameters ###
 These are the only values in the model the user has to change. They are near the top of the *TX_elections_model* file.
 
-* ***total_steps***: The number of ReCom Markov chain steps in the run. This is the total number of accepted plans.
+* ***total_steps***: The number of ReCom Markov chain steps in the run. 
 * ***pop_tol***: Maximum allowable population deviation from the ideal (total population/number of districts).
 * ***run_name***: Name for the chain run (this will appear in the output file names).
 * ***start_map***: The first map of the chain. Can enter the enacted Congressional map ('CD'), a seed for a demographic-constrained run ("Seed_Demo") or 'new_seed' to start with a randomly generated plan.
