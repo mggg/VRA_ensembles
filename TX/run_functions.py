@@ -33,12 +33,17 @@ DIR = ''
 
 def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1, EI_statewide, primary_elecs, \
                              runoff_elecs, elec_match_dict, min_cand_weights_dict, cand_race_dict):
-    #map data storage: set up all dataframes to be filled   
+    
+    """
+    Returns election weights for state and equal scores for Black, Latino and Neither
+    effectivness. Election weights are the same across districts for these scores, as they 
+    use statewide candidate preferences (and all weights = 1 for the equal score). It also returns
+    dataframes of statewide Latino and Black-preferred candidates in primaries and runoffs.
+    """
     black_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
     black_pref_cands_prim_state["Election Set"] = elec_sets
     hisp_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
     hisp_pref_cands_prim_state["Election Set"] = elec_sets
-    #store runoff preferences for instances where min-pref candidate needs to switch btwn prim and runoff
     black_pref_cands_runoffs_state = pd.DataFrame(columns = range(num_districts))
     black_pref_cands_runoffs_state["Election Set"] = elec_sets
     hisp_pref_cands_runoffs_state = pd.DataFrame(columns = range(num_districts))
@@ -61,7 +66,7 @@ def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1
     neither_ei_conf = [prob_conf_conversion(x*y) for x,y in zip(black_ei_prob, hisp_ei_prob)]
     neither_conf_W3_state = np.tile(neither_ei_conf, (num_districts, 1)).transpose()
     
-    #pre-compute W2 and W3 dfs for statewide/equal modes   
+    #pre-compute W2 and W3 for statewide/equal modes   
     for elec in primary_elecs + runoff_elecs:
         black_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'BCVAP')), "Candidate"].values[0]
         hisp_pref_cand = EI_statewide.loc[((EI_statewide["Election"] == elec) & (EI_statewide["Demog"] == 'HCVAP')), "Candidate"].values[0]
@@ -79,8 +84,9 @@ def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1
                   range(num_districts), min_cand_weights_dict, black_pref_cands_prim_state, hisp_pref_cands_prim_state, cand_race_dict)
 
     
-    #compute final election weights (for statewide and equal scores) by taking product of W1, W2, and W3 for each election set and district
-    #Note: because these are statewide weights, an election set will have the same weight across districts
+    #compute final election weights (for statewide and equal scores) by taking product of W1, W2, 
+    #and W3 for each election set and district #Note: because these are statewide weights, 
+    #an election set will have the same weight across districts
     black_weight_state = recency_W1*min_cand_black_W2_state*black_conf_W3_state
     hisp_weight_state = recency_W1*min_cand_hisp_W2_state*hisp_conf_W3_state    
     neither_weight_state = recency_W1*min_cand_neither_W2_state*neither_conf_W3_state
@@ -98,6 +104,13 @@ def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, 
                              geo_id, primary_elecs, runoff_elecs, elec_match_dict, bases, outcomes,\
                              recency_W1, cand_race_dict, min_cand_weights_dict):
    
+    """
+    Returns election weights for the district score for Black, Latino and Neither
+    effectiveness. Election weights differ across districts, as it uses district-specific preferred
+    candidates. It also returns dataframes of district-specific
+    Latino and Black-preferred candidates in primaries and runoffs.
+    """
+    
     black_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
     black_pref_cands_prim_dist["Election Set"] = elec_sets
     hisp_pref_cands_prim_dist = pd.DataFrame(columns = dist_changes)
@@ -171,6 +184,13 @@ def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_
                          black_pref_cands_prim, hisp_pref_cands_prim, elec_match_dict, \
                          mean_prec_counts, geo_id):
     
+    """ 
+    Computes alignment (also known as "group control") scores in primary elections.
+    Alignment scores vary by district in both statewide and district scores, as it computes
+    the number of votes cast by Black and Latino voters for their preferred candidates in
+    each district.
+    """
+    
     black_align_prim = np.empty((len(elec_sets),0), float)
     hisp_align_prim = np.empty((len(elec_sets),0), float)
     
@@ -210,7 +230,12 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, \
                  mode, logit_params, logit = False):
-    #determine if election set accrues points by district for Black and Latino voters
+    
+    """
+    Returns (Latino, Black, Neither, Overlap) effectiveness distribution for each district. 
+    The four values sum to one. State-specific rules governing what counts as a "win" for 
+    an election set are coded here (for example, rules about advancing to runoff elections etc.).
+    """
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
     runoff_winners = map_winners[map_winners["Election Type"] == 'Runoff'].reset_index(drop = True)
@@ -271,8 +296,8 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
 
         runoff_hisp_pref = ["N/A" if rw == "N/A" else \
                      hpc for rw,hpc in zip(runoff_winner_list, list(hisp_pref_cands_runoffs[dist]))]               
+       
         #winning conditions (conditions to accrue points for election set/minority group):
-
         black_accrue = [(prim_win == bpc and party_win == 'D') if run_race == None else \
                         ((bpp_rank < 3 and run_win == runbp and party_win == 'D') or \
                         (primary_race_share_dict[prim_race][bpc] > .5 and party_win == 'D')) \
@@ -305,7 +330,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     black_points_accrued = black_weight_array*black_pref_wins
     hisp_points_accrued = hisp_weight_array*hisp_pref_wins    
  
-########################################################################################
+   #####################################################################################
     #Compute district probabilities: Black, Latino, Neither and Overlap 
     black_vra_prob = list(np.sum(black_points_accrued*black_align_prim, axis = 0)/np.sum(black_weight_array, axis = 0))             
     hisp_vra_prob = list(np.sum(hisp_points_accrued*hisp_align_prim, axis = 0)/np.sum(hisp_weight_array, axis = 0))             
@@ -346,6 +371,11 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df, hisp_pref_cands_df, \
                cand_race_dict):
     
+    """
+    Returns in-group preferred candidate election weight (W2). This weight is 1 if the Latino-preferred
+    candidate is Latino, etc.
+    """
+    
     min_cand_black_W2 = np.empty((len(elec_sets),0), float)
     min_cand_hisp_W2 = np.empty((len(elec_sets),0), float)
     min_cand_neither_W2 = np.empty((len(elec_sets),0), float)
@@ -368,13 +398,15 @@ def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,
         min_cand_weights_dict['Other'] if ('Hispanic' not in hpr and 'Black' not in bpr) else \
            min_cand_weights_dict['Partial '] for bpr,hpr in zip(black_pref_race, hisp_pref_race)]
         min_cand_neither_W2 = np.append(min_cand_neither_W2, np.array([neither_cand_weight]).transpose(), axis = 1)
-    
         
     return min_cand_black_W2, min_cand_hisp_W2, min_cand_neither_W2
 
 
-#to aggregrate precinct EI to district EI for district model mode
+
 def cand_pref_all_draws_outcomes(prec_quant_df, precs, bases, outcomes, sample_size = 1000 ):
+    """
+    To aggregrate precinct EI to district EI for district model score
+    """
     quant_vals = np.array([0,125,250,375,500,625,750,875,1000])
     draws = {}
     for outcome in outcomes.keys():

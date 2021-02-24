@@ -64,13 +64,13 @@ from ast import literal_eval
 total_steps = 1000
 pop_tol = .01  
 run_name = 'LA_neutral_Cong_run' 
-start_map = 'CD' #SEND, CD or 'new_seed'
+start_map = 'CD' # CD or 'new_seed'
 effectiveness_cutoff = .65
 ensemble_inclusion = False
 record_statewide_modes = True
 record_district_mode = True
 model_mode = 'statewide' #'district', 'equal', 'statewide'
-store_interval = 200  #how many Markov chain steps between data storage intervals
+store_interval = 200  #number of steps between data storage intervals
 
 #fixed parameters ########################################################
 enacted_black = 1 #1 Congress, 11 State Senate
@@ -191,27 +191,29 @@ if record_district_mode:
 
 #The elections model function (used as an updater). Takes in partition and returns Black-effectiveness likelihood per district 
 def final_elec_model(partition):  
-    #Overview#####################################################  
-    #The output of the elections model is tke likelihood each distict is Black-effective:
-    #To compute this, each election set is first weighted
-    #by multiplying a recency weight (W1), "in-group"-minority-preference weight (W2) and 
-    #a preferred-candidate-confidence weight (W3).
-    #If the Black preferred candidate wins the election (set) a number of points equal to
-    #the set's weight is accrued. The ratio of the accrued points points to the total possible points
-    #is the raw Black -effectiviness score for the district. 
+    """
+    The output of the elections model is tke likelihood each distict is Black-effective:
+    To compute this, each election set is first weighted
+    by multiplying a recency weight (W1), "in-group"-minority-preference weight (W2) and 
+    a preferred-candidate-confidence weight (W3).
+    If the Black preferred candidate wins the election (set) a number of points equal to
+    the set's weight is accrued. The ratio of the accrued points points to the total possible points
+    is the raw Black -effectiviness score for the district. 
     
-    # After the raw scores are computed, they are adjusted using an "Alignment" score, or a score
-    # that measures the share of votes cast for a minority-preferred candidate by the minority group itself.
+    After the raw scores are computed, they are adjusted using an "Alignment" (also known as
+    "Group Control) score, which measures the share of votes cast for a minority-preferred 
+    candidate by the minority group itself.
     
-    # Finally, the adjusted Black-effectiveness score is fed through a logit function,
-    # transforming it into a probability that districts are Black-effective.
+    Finally, the adjusted Black-effectiveness score is fed through a logit function,
+    transforming it into a probability that districts are Black-effective.
     
-    #We need to track several entities in the model, which will be dataframes, whose columns are districts and
-    #rows are election sets (or sometimes individual elections)
-    #These dataframes each store one of the following: Black preferred candidates (in the
-    #election set's primary), Black preferred candidates in runoffs, winners of primary,
-    #runoff and general elections, election winners, weights W1, W2 and W3, Alignment scores
-    #and final election set weight for Black voters
+    We need to track several entities in the model, which will be dataframes or arrays,
+    whose columns are districts and rows are election sets (or sometimes individual elections)
+    These dataframes each store one of the following: Black preferred candidates (in the
+    election set's primary), Black preferred candidates in runoffs, winners of primary,
+    runoff and general elections, election winners, weights W1, W2 and W3, Alignment scores
+    and final election set weight for Black voters.
+    """
     ###########################################################
     #only need to run model on two ReCom districts that have changed
     if partition.parent is not None:
@@ -303,6 +305,10 @@ def final_elec_model(partition):
     return final_state_prob, final_equal_prob, final_dist_prob
                  
 def effective_districts(dictionary):
+    """
+    Given district effectiveness distributions, this function returns the total districts
+    that are above the effectivness threshold for Black voters.
+    """
     black_threshold = effectiveness_cutoff
     
     if "N/A" not in dictionary.values():
@@ -395,9 +401,7 @@ store_plans["GEOID"] = [state_gdf_geoid.iloc[i][0] for i in store_plans["Index"]
 map_metric = pd.DataFrame(columns = ["B_state", "B_equal", "B_dist", \
                                      "Cut Edges", "County Splits"], index = list(range(store_interval)))
 
-
-#prep district-by-district storage (each metric in its own df)
-#score distributions
+  #prep district-by-district storage (each metric in its own df)
 score_dfs = []
 score_df_names = []
 if record_statewide_modes:
@@ -410,10 +414,10 @@ if record_district_mode:
     score_dfs.append(final_dist_prob_df)
     score_df_names.append('final_dist_prob_df')
 
-#demographic data storage (uses 2018 CVAP)
+  #demographic data storage (uses 2018 CVAP)
 black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-#partisan data storage
+  #partisan data storage
 pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 sen16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 centroids_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
@@ -518,15 +522,11 @@ for step in chain:
 
 #output data
 store_plans.to_csv(DIR + "outputs/store_plans_{}.csv".format(run_name), index= False)
-#store district-by-district data
-#demo data
 black_prop_df.to_csv(DIR + "outputs/black_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
 white_prop_df.to_csv(DIR + "outputs/white_prop_df_{}.csv".format(run_name), mode = 'a', header = False, index= False)
-#partisan data
 pres16_df.to_csv(DIR + "outputs/pres16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 sen16_df.to_csv(DIR + "outputs/sen16_df_{}.csv".format(run_name), mode = 'a', header = False, index = False)
 map_metric.to_csv(DIR + "outputs/map_metric_{}.csv".format(run_name), index = True)
-#vra data
 if total_steps <= store_interval:
     for score_df, score_df_name in zip(score_dfs, score_df_names):        
         score_df.to_csv(DIR + "outputs/{}_{}.csv".format(score_df_name, run_name), index= False)

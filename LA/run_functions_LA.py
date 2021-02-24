@@ -33,7 +33,13 @@ DIR = ''
 
 def precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1, EI_statewide, primary_elecs, \
                              elec_match_dict, min_cand_weights_dict, cand_race_dict):
-    #map data storage: set up all dataframes to be filled   
+    
+    """
+    Returns election weights for state and equal scores for Black effectivness.
+    Election weights are the same across districts for these scores, as they 
+    use statewide candidate preferences (and all weights = 1 for the equal score). It also returns
+    dataframes of statewide Black-preferred candidates in primaries and runoffs.
+    """
     black_pref_cands_prim_state = pd.DataFrame(columns = range(num_districts))
     black_pref_cands_prim_state["Election Set"] = elec_sets  
     
@@ -69,6 +75,13 @@ def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, 
     black_pref_cands_prim_dist["Election Set"] = elec_sets
     black_conf_W3_dist = np.empty((len(elec_sets),0), float)
     
+    """
+    Returns election weights for the district score for Black effectivess.
+    Election weights differ across districts, as it uses district-specific preferred
+    candidates. It also returns dataframes of district-specific
+    Black-preferred candidates in primaries and runoffs.
+    """
+    
     for district in dist_changes:        
         state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
         dist_prec_list = list(state_gdf[state_gdf["New Map"] == district][geo_id])
@@ -101,7 +114,13 @@ def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, 
 def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
                          black_pref_cands_prim, elec_match_dict, \
                          mean_prec_counts, geo_id):
-       
+    
+    """ 
+    Computes alignment (also known as "group control") scores in primary elections.
+    Alignment scores vary by district in both statewide and district scores, as it computes
+    the number of votes cast by Black voters for their preferred candidates in
+    each district.
+    """
     black_align_prim = np.empty((len(elec_sets),0), float)
 
     for district in dist_changes:        
@@ -129,7 +148,12 @@ def compute_final_dist(map_winners, black_pref_cands_df,
                  cand_race_table, num_districts, candidates, \
                  elec_sets, elec_set_dict, black_align_prim, \
                  mode, logit_params, logit = False):
-    #determine if election set accrues points by district for black 
+    
+    """
+    Returns Black-effectiveness probabilities for each district. 
+    State-specific rules governing what counts as a "win" for 
+    an election set are coded here (for example, rules about advancing to runoff elections etc.).
+    """
     primary_winners = map_winners[map_winners["Election Type"] == 'Primary'].reset_index(drop = True)
     general_winners = map_winners[map_winners["Election Type"] == 'General'].reset_index(drop = True)
            
@@ -196,6 +220,10 @@ def compute_final_dist(map_winners, black_pref_cands_df,
 def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,\
                cand_race_dict):
     
+    """
+    Returns in-group preferred candidate election weight (W2). This weight is 1 if the Black-preferred
+    candidate is Black
+    """
     min_cand_black_W2 = np.empty((len(elec_sets),0), float)
     for dist in districts:
         black_pref = list(black_pref_cands_df[dist])
@@ -209,8 +237,10 @@ def compute_W2(elec_sets, districts, min_cand_weights_dict, black_pref_cands_df,
     return min_cand_black_W2
 
 
-#to aggregrate precinct EI to district EI for district model mode
 def cand_pref_all_draws_outcomes(prec_quant_df, precs, bases, outcomes, sample_size = 1000 ):
+    """
+    To aggregrate precinct EI to district EI for district model score
+    """
     quant_vals = np.array([0,125,250,375,500,625,750,875,1000])
     draws = {}
     for outcome in outcomes.keys():

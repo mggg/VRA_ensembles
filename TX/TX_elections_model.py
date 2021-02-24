@@ -61,11 +61,11 @@ from ast import literal_eval
 
 #user input parameters######################################
 total_steps = 1000
-pop_tol = .01 #U.S. Cong (deviation from ideal district population)
+pop_tol = .01 #U.S. Congress (deviation from ideal district population)
 run_name = 'Texas_neutral_run'
 start_map = 'CD' #CD, 'Seed_Demo', or "new_seed"
 effectiveness_cutoff = .6
-ensemble_inclusion = True
+ensemble_inclusion = False
 ensemble_inclusion_demo = False
 record_statewide_modes = True
 record_district_mode = True
@@ -75,9 +75,9 @@ store_interval = 200  #how many Markov chain steps between data storage
 
 #fixed parameters#################################################
 num_districts = 36 #36 Congressional districts
-enacted_black = 4 #number of districts in enacted map with B + Ov > 60%
-enacted_hisp = 8 #number of districts in enacted map with L + Ov > 60%
-enacted_distinct = 11 #number of districts in enacted map with B + Ov > 60% or L + Ov > 60% or both
+enacted_black = 4 #number of districts in enacted map with Black effectiveness> 60%
+enacted_hisp = 8 #number of districts in enacted map with Latino effectiveness > 60%
+enacted_distinct = 11 #number of districts in enacted map with B > 60% or L > 60% or both
 plot_path = 'TX_VTDs/TX_VTDs.shp'  #for shapefile
 
 DIR = ''
@@ -134,7 +134,7 @@ c_y = centroids.y
 for node in graph.nodes():
     graph.nodes[node]["C_X"] = c_x[node]
     graph.nodes[node]["C_Y"] = c_y[node]
-#    
+    
 #set up elections data structures ################################################
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
@@ -148,7 +148,7 @@ general_elecs = list(elec_data_trunc[elec_data_trunc["Type"] == 'General'].Elect
 primary_elecs = list(elec_data_trunc[elec_data_trunc["Type"] == 'Primary'].Election)
 runoff_elecs = list(elec_data_trunc[elec_data_trunc["Type"] == 'Runoff'].Election)
 
-#this dictionary matches a specific election with the election set it belongs to
+  #this dictionary matches a specific election with the election set it belongs to
 elec_set_dict = {}
 for elec_set in elec_sets:
     elec_set_df = elec_data_trunc[elec_data_trunc["Election Set"] == elec_set]
@@ -156,8 +156,8 @@ for elec_set in elec_sets:
     
 elec_match_dict = dict(zip(elec_data_trunc["Election"], elec_data_trunc["Election Set"]))
 
-#make dictionary that maps an election to its candidates
-#only include 2 major party candidates in generals (assumes here major party candidates are first in candidate list)
+   #dictionary that maps an election to its candidates
+   #only include 2 major party candidates in generals (assumes here major party candidates are first in candidate list)
 candidates = {}
 for elec in elections:
     #get rid of republican candidates in primaries or runoffs (primary runoffs)
@@ -173,14 +173,15 @@ for elec in elections:
 cand_race_dict = cand_race_table.set_index("Candidates").to_dict()["Race"]
 min_cand_weights_dict = {key:min_cand_weights.to_dict()[key][0] for key in  min_cand_weights.to_dict().keys()}     
 
-########################################## pre-compute as much as possible for elections updater ##########
-#pre-compute recency_W1 df for all model modes 
+######################## pre-compute as much as possible for elections model ##############
+  #pre-compute election recency weights "W1" df for all model modes 
 elec_years = [elec_data_trunc.loc[elec_data_trunc["Election Set"] == elec_set, 'Year'].values[0].astype(str) \
               for elec_set in elec_sets]
 recency_scores = [recency_weights[elec_year][0] for elec_year in elec_years]
 recency_W1 = np.tile(recency_scores, (num_districts, 1)).transpose()
 
-#precompute statewide EI and W1, W2, W3 for statewide/equal modes 
+   #precompute statewide EI and recency (W1), in-group candidate(W2), 
+   #and candidate confidence (W3) for statewide/equal modes 
 if record_statewide_modes:
     black_weight_state, hisp_weight_state, neither_weight_state, black_weight_equal,\
     hisp_weight_equal, neither_weight_equal, black_pref_cands_prim_state, hisp_pref_cands_prim_state, \
@@ -188,8 +189,7 @@ if record_statewide_modes:
                      = precompute_state_weights(num_districts, elec_sets, elec_set_dict, recency_W1, EI_statewide, primary_elecs, \
                      runoff_elecs, elec_match_dict, min_cand_weights_dict, cand_race_dict)
 
-#precompute set-up for district mode, if used (need precinct level EI set up)
-#need to precompute all the column bases and dictionary for all (demog, election) pairs
+  #precompute set-up for district mode (need precinct-level EI data)
 if record_district_mode:             
     demogs = ['BCVAP','HCVAP']
     bases = {col.split('.')[0]+'.'+col.split('.')[1] for col in prec_ei_df.columns if col[:5] in demogs and 'abstain' not in col and \
@@ -207,29 +207,33 @@ if record_district_mode:
 
 #The elections model function (used as an updater). Takes in partition and returns effectiveness distribution per district
 def final_elec_model(partition):  
-    #Overview#####################################################  
-    #The output of the elections model is a probability distribution for each district:
-    #% Latino, Black, Neither or Overlap effective
-    #To compute these, each election set is first weighted (different for Black and Latino)
-    #by multiplying a recency weight (W1), "in-group"-minority-preference weight (W2) and 
-    #a preferred-candidate-confidence weight (W3).
-    #If the Black (Latino) preferred candidate wins the election (set) a number of points equal to
-    #the set's weight is accrued. The ratio of the accrued points points to the total possible points
-    #is the raw Black (Latino)-effectiviness score for the district. 
+    """
+    The output of the elections model is a probability distribution for each district:
+    (Latino, Black, Neither or Overlap)-effective
+    To compute these, each election set is first weighted (different for Black and Latino)
+    according to three factors:
+    a recency weight (W1), "in-group"-minority-preference weight (W2) and 
+    a preferred-candidate-confidence weight (W3).
+    If the Black (Latino) preferred candidate wins the election (set) a number of points equal to
+    the set's weight is accrued. The ratio of the accrued points to the total possible points
+    is the raw Black (Latino)-effectiviness score for the district. 
     
-    # After the raw scores are computed, they are adjusted using an "Alignment" score, or a score
-    # that measures the share of votes cast for a minority-preferred candidate by the minority group itself.
+    After the raw scores are computed, they are adjusted using an "Alignment" (also called
+    "Group Control") score, which measures the share of votes cast 
+    for a minority-preferred candidate by the minority group itself.
     
-    # Finally, the Black, Latino, Overlap, and Neither distribution (the values sum to 1) 
-    # is computed, by feeding the adjusted effectiveness scores through a logit function,
-    # and interpolating for the final four values.
+    Finally, the Black, Latino, Overlap, and Neither distribution (the values sum to 1) 
+    is computed, by feeding the adjusted effectiveness scores through a fitted logit function,
+    and interpolating for the final four values. The output scores can be interpreted as the
+    probability a district is effective for each group.
     
-    #We need to track several entities in the model, which will be dataframes, whose columns are districts and
-    #rows are election sets (or sometimes individual elections)
-    #These dataframes each store one of the following: Black (latino) preferred candidates (in the
-    #election set's primary), Black (Latino) preferred candidates in runoffs, winners of primary,
-    #runoff and general elections, election winners, weights W1, W2 and W3, Alignment scores
-    #and final election set weight for Black and Latino voters
+    We need to track several entities in the model, which will be dataframes or arrays,
+    whose columns are districts and rows are election sets (or sometimes individual elections).
+    These dataframes each store one of the following: Black (Latino) preferred candidates (in the
+    election set's primary), Black (Latino) preferred candidates in runoffs, winners of primary,
+    runoff and general elections, weights W1, W2 and W3, Alignment (Group Control) scores
+    and final election set weights for Black and Latino voters.
+    """
     ###########################################################   
     #We only need to run model on two ReCom districts that have changed in each step
     if partition.parent is not None:
@@ -256,8 +260,8 @@ def final_elec_model(partition):
     for i in dist_changes:
         map_winners[i] = [max(dist_elec_results[elec][i].items(), key=operator.itemgetter(1))[0] for elec in elections]
 
-#########################################################################################
-    #If we compute statewide modes: compute alignment/group-control scores for each district #################
+    ######################################################################################
+    #If we compute statewide scores: compute alignment/group-control scores for each district #################
     #and final probability distributions
     if record_statewide_modes: 
         black_align_prim_state, hisp_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
@@ -279,7 +283,7 @@ def final_elec_model(partition):
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
                                 black_align_prim_state, hisp_align_prim_state, "equal", logit_params, logit = True)
     
-    #If we are computing district mode: ######################################################
+    #If we are computing district score: ######################################################
     #compute district weights, preferred candidates, alignment/group control and district probability distribution: district   
     if record_district_mode: 
         black_weight_dist, hisp_weight_dist, neither_weight_dist, black_pref_cands_prim_dist,\
@@ -298,7 +302,7 @@ def final_elec_model(partition):
                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
                                black_align_prim_dist, hisp_align_prim_dist, 'district', logit_params, logit = True)
 
-    #new vector of probability distributions-by-district is the same as last ReCom step, 
+    #New vector of probability distributions-by-district is the same as last ReCom step, 
     #except in 2 changed districts 
     if partition.parent == None:
          final_state_prob = {key:final_state_prob_dict[key] for key in sorted(final_state_prob_dict)}\
@@ -326,6 +330,11 @@ def final_elec_model(partition):
     return final_state_prob, final_equal_prob, final_dist_prob
 
 def effective_districts(dictionary):
+    """
+    Given district effectiveness distributions, this function returns the total districts
+    that are above the effectivness threshold for Black and Latino voters, and the total
+    distinct effective districts.
+    """
     black_threshold = effectiveness_cutoff
     hisp_threshold = effectiveness_cutoff
     
@@ -412,8 +421,12 @@ proposal = partial(
     recom, pop_col=tot_pop, pop_target=ideal_population, epsilon= pop_tol, node_repeats=3
 )
 
-#constraints ######################
+#constraints ############################################
 def inclusion(partition):
+    """
+    Returns 'True' if proposed plan has greater than or equal to the number of Black, Latino and 
+    distinct effective districts as the enacted map.
+    """
     final_state_prob, final_equal_prob, final_dist_prob = partition["final_elec_model"]
     inclusion_dict = final_state_prob if model_mode == 'statewide' else final_equal_prob if model_mode == 'equal' else final_dist_prob
     hisp_vra_dists, black_vra_dists, total_distinct = effective_districts(inclusion_dict)
@@ -422,6 +435,10 @@ def inclusion(partition):
           black_vra_dists >= enacted_black and hisp_vra_dists >= enacted_hisp
           
 def inclusion_demo(partition):
+    """
+    Returns 'True' if proposed plan has at least 8 districts over 45% HCVAP and at least
+    4 over 25% BCVAP.
+    """
     bcvap_share_dict = {d:partition["BCVAP"][d]/partition["CVAP"][d] for d in partition.parts}
     hcvap_share_dict = {d:partition["HCVAP"][d]/partition["CVAP"][d] for d in partition.parts}       
     bcvap_share = list(bcvap_share_dict.values())
@@ -429,7 +446,7 @@ def inclusion_demo(partition):
     
     hcvap_over_thresh = len([k for k in hcvap_share if k > .45])
     bcvap_over_thresh = len([k for k in bcvap_share if k > .25 ])
-    return (hcvap_over_thresh >= 8 and bcvap_over_thresh >= 4)
+    return (hcvap_over_thresh >= enacted_hisp and bcvap_over_thresh >= enacted_black)
        
 #acceptance functions #####################################
 accept = accept.always_accept
@@ -455,8 +472,7 @@ map_metric = pd.DataFrame(columns = ["Latino_state", "Black_state", "Distinct_st
                                      "Latino_dist", "Black_dist", "Distinct_dist", \
                                      "Cut Edges", "County Splits"], index = list(range(store_interval)))
 
-#prep district-by-district storage
-#score distributions
+  #prep district-by-district storage
 score_dfs = []
 score_df_names = []
 if record_statewide_modes:
@@ -470,16 +486,16 @@ if record_district_mode:
     score_df_names.append('final_dist_prob_df')
     
     
-#demographic data storage (uses 2018 CVAP)
+  #demographic data storage (uses 2018 CVAP)
 hisp_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 black_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 white_prop_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-#partisan data storage
+  #partisan data storage
 pres16_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 pres12_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 sen18_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 gov18_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
-#district centroids storage
+  #district centroids storage
 centroids_df = pd.DataFrame(columns = range(num_districts), index = list(range(store_interval)))
 
 #run chain and collect data ##############################################################################
@@ -496,7 +512,6 @@ for step in chain:
     total_hisp_final_equal, total_black_final_equal, total_distinct_equal = effective_districts(final_equal_prob)
     total_hisp_final_dist, total_black_final_dist, total_distinct_dist = effective_districts(final_dist_prob)
     
-    #store all scores for all distribution types    
     map_metric.loc[step_Num] = [total_hisp_final_state, total_black_final_state, total_distinct_state,\
                       total_hisp_final_equal, total_black_final_equal, total_distinct_equal, \
                       total_hisp_final_dist, total_black_final_dist, total_distinct_dist,\
