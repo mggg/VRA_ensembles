@@ -6,7 +6,6 @@ Created on Thu Feb 13 12:19:57 2020
 """
 import random
 a = random.randint(0,10000000000)
-a = 10
 import networkx as nx
 from gerrychain.random import random
 random.seed(a)
@@ -56,7 +55,7 @@ from scipy import stats
 import sys
 from functools import partial
 from run_functions import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
-cand_pref_all_draws_outcomes, precompute_state_weights, compute_district_weights, compute_align_scores
+cand_pref_all_draws_outcomes, precompute_state_weights, compute_district_weights
 from ast import literal_eval
 
 #user input parameters######################################
@@ -107,7 +106,7 @@ cand_race_table = pd.read_csv("Candidate_Race_Party.csv")
 EI_statewide = pd.read_csv("statewide_rxc_EI_preferences.csv")
 prec_ei_df = pd.read_csv("prec_count_quants.csv", dtype = {'CNTYVTD':'str'})
 mean_prec_counts = pd.read_csv("mean_prec_vote_counts.csv", dtype = {'CNTYVTD':'str'})
-logit_params = pd.read_csv("TX_logit_params.csv")
+logit_params = pd.read_csv('TX_GC1b_FEB_24_21_POCDEM_or_plur_std_logit_params.csv')
 
 #initialize state_gdf########################################################
 #reformat/re-index enacted map plans
@@ -134,7 +133,7 @@ c_y = centroids.y
 for node in graph.nodes():
     graph.nodes[node]["C_X"] = c_x[node]
     graph.nodes[node]["C_Y"] = c_y[node]
-    
+   
 #set up elections data structures ################################################
 elections = list(elec_data["Election"]) 
 elec_type = elec_data["Type"]
@@ -218,8 +217,8 @@ def final_elec_model(partition):
     the set's weight is accrued. The ratio of the accrued points to the total possible points
     is the raw Black (Latino)-effectiviness score for the district. 
     
-    After the raw scores are computed, they are adjusted using an "Alignment" (also called
-    "Group Control") score, which measures the share of votes cast 
+    Raw scores are adjusted by multiplying them by a "Group Control" factor,
+    which measures the share of votes cast 
     for a minority-preferred candidate by the minority group itself.
     
     Finally, the Black, Latino, Overlap, and Neither distribution (the values sum to 1) 
@@ -231,7 +230,7 @@ def final_elec_model(partition):
     whose columns are districts and rows are election sets (or sometimes individual elections).
     These dataframes each store one of the following: Black (Latino) preferred candidates (in the
     election set's primary), Black (Latino) preferred candidates in runoffs, winners of primary,
-    runoff and general elections, weights W1, W2 and W3, Alignment (Group Control) scores
+    runoff and general elections, weights W1, W2 and W3
     and final election set weights for Black and Latino voters.
     """
     ###########################################################   
@@ -261,30 +260,24 @@ def final_elec_model(partition):
         map_winners[i] = [max(dist_elec_results[elec][i].items(), key=operator.itemgetter(1))[0] for elec in elections]
 
     ######################################################################################
-    #If we compute statewide scores: compute alignment/group-control scores for each district #################
-    #and final probability distributions
-    if record_statewide_modes: 
-        black_align_prim_state, hisp_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                        black_pref_cands_prim_state, hisp_pref_cands_prim_state, elec_match_dict, \
-                                                        mean_prec_counts, geo_id)
-        
-                                           
+    #If we compute statewide scores: compute district effectivness probabilities  #################
+    if record_statewide_modes:                                                 
         #district probability distribution: statewide
         final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
                                 hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_state, \
                                 black_weight_state, hisp_weight_state, dist_elec_results, dist_changes,
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict,  \
-                                black_align_prim_state, hisp_align_prim_state, "statewide", logit_params, logit = True)
+                                "statewide", partition, logit_params, logit = True)
         
         #district probability distribution: equal
         final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, black_pref_cands_runoffs_state,\
                                 hisp_pref_cands_prim_state, hisp_pref_cands_runoffs_state, neither_weight_equal, \
                                 black_weight_equal, hisp_weight_equal, dist_elec_results, dist_changes,
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                                black_align_prim_state, hisp_align_prim_state, "equal", logit_params, logit = True)
+                                "equal", partition, logit_params, logit = True)
     
     #If we are computing district score: ######################################################
-    #compute district weights, preferred candidates, alignment/group control and district probability distribution: district   
+    #compute district weights, preferred candidates and district probability distribution: district   
     if record_district_mode: 
         black_weight_dist, hisp_weight_dist, neither_weight_dist, black_pref_cands_prim_dist,\
         black_pref_cands_runoffs_dist, hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist\
@@ -292,15 +285,11 @@ def final_elec_model(partition):
                                  geo_id, primary_elecs, runoff_elecs, elec_match_dict, bases, outcomes,\
                                  recency_W1, cand_race_dict, min_cand_weights_dict)
         
-        black_align_prim_dist, hisp_align_prim_dist = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                      black_pref_cands_prim_dist, hisp_pref_cands_prim_dist, elec_match_dict, \
-                                                      mean_prec_counts, geo_id)
-
         final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist, black_pref_cands_runoffs_dist,\
                                hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist, neither_weight_dist, \
                                black_weight_dist, hisp_weight_dist, dist_elec_results, dist_changes,
                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                               black_align_prim_dist, hisp_align_prim_dist, 'district', logit_params, logit = True)
+                               'district', partition, logit_params, logit = True)
 
     #New vector of probability distributions-by-district is the same as last ReCom step, 
     #except in 2 changed districts 

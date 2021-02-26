@@ -178,46 +178,7 @@ def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, 
         
     return black_weight_dist, hisp_weight_dist, neither_weight_dist, black_pref_cands_prim_dist, \
             black_pref_cands_runoffs_dist, hisp_pref_cands_prim_dist, hisp_pref_cands_runoffs_dist
-                                     
-
-def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                         black_pref_cands_prim, hisp_pref_cands_prim, elec_match_dict, \
-                         mean_prec_counts, geo_id):
-    
-    """ 
-    Computes alignment (also known as "group control") scores in primary elections.
-    Alignment scores vary by district in both statewide and district scores, as it computes
-    the number of votes cast by Black and Latino voters for their preferred candidates in
-    each district.
-    """
-    
-    black_align_prim = np.empty((len(elec_sets),0), float)
-    hisp_align_prim = np.empty((len(elec_sets),0), float)
-    
-    for district in dist_changes:        
-        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
-        dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])        
-        cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
-                
-        black_align_dist = [sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/\
-                            (sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + \
-                             sum(cand_counts_dist["HCVAP"+ '.' + black_pref_cand]) + \
-                             sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + \
-                             sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand])) for \
-                             black_pref_cand in black_pref_cands_prim[district]]
-        
-        hisp_align_dist = [sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand])/\
-                            (sum(cand_counts_dist["BCVAP"+ '.' + hisp_pref_cand]) + \
-                             sum(cand_counts_dist["HCVAP"+ '.' + hisp_pref_cand]) + \
-                             sum(cand_counts_dist["WCVAP"+ '.' + hisp_pref_cand]) + \
-                             sum(cand_counts_dist["OCVAP"+ '.' + hisp_pref_cand])) for \
-                             hisp_pref_cand in hisp_pref_cands_prim[district]]
-        
-        black_align_prim = np.append(black_align_prim, np.array([black_align_dist]).transpose(), axis = 1)                
-        hisp_align_prim = np.append(hisp_align_prim, np.array([hisp_align_dist]).transpose(), axis = 1)                
-    
-    return black_align_prim, hisp_align_prim   
-     
+                                         
     
 def prob_conf_conversion(cand_prob):
     #parameters chosen to be ~0 confidence until 50% then rapid ascension to confidence ~ 1
@@ -228,8 +189,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
                  hisp_pref_cands_df, hisp_pref_cands_runoffs, neither_weight_array, \
                  black_weight_array, hisp_weight_array, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
-                 elec_sets, elec_set_dict, black_align_prim, hisp_align_prim, \
-                 mode, logit_params, logit = False):
+                 elec_sets, elec_set_dict, mode, partition, logit_params, logit = False):
     
     """
     Returns (Latino, Black, Neither, Overlap) effectiveness distribution for each district. 
@@ -256,8 +216,7 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
     primary_races = [elec_set_dict[elec_set]["Primary"] for elec_set in elec_sets]
     runoff_races = [None if 'Runoff' not in elec_set_dict[elec_set].keys() else elec_set_dict[elec_set]["Runoff"] for elec_set in elec_sets]
     cand_party_dict = cand_race_table.set_index("Candidates").to_dict()["Party"]
-
-    
+   
     for dist in dist_changes:
         black_pref_cands = list(black_pref_cands_df[dist])
         hisp_pref_cands = list(hisp_pref_cands_df[dist])
@@ -332,10 +291,16 @@ def compute_final_dist(map_winners, black_pref_cands_df, black_pref_cands_runoff
  
    #####################################################################################
     #Compute district probabilities: Black, Latino, Neither and Overlap 
-    black_vra_prob = list(np.sum(black_points_accrued*black_align_prim, axis = 0)/np.sum(black_weight_array, axis = 0))             
-    hisp_vra_prob = list(np.sum(hisp_points_accrued*hisp_align_prim, axis = 0)/np.sum(hisp_weight_array, axis = 0))             
-    neither_vra_prob = list(np.sum(neither_points_accrued, axis = 0)/np.sum(neither_weight_array, axis = 0))             
+    black_vra_elec_wins = list(np.sum(black_points_accrued, axis = 0)/np.sum(black_weight_array, axis = 0))             
+    black_gc = [min(1,(partition["BCVAP"][i]/partition["CVAP"][i])*2) for i in sorted(dist_changes)]
+    black_vra_prob = [i*j for i,j in zip(black_vra_elec_wins, black_gc)]
 
+    hisp_vra_elec_wins = list(np.sum(hisp_points_accrued, axis = 0)/np.sum(hisp_weight_array, axis = 0))             
+    hisp_gc = [min(1,(partition["HCVAP"][i]/partition["CVAP"][i])*2) for i in sorted(dist_changes)]
+    hisp_vra_prob = [i*j for i,j in zip(hisp_vra_elec_wins, hisp_gc)]
+    
+    neither_vra_prob = list(np.sum(neither_points_accrued, axis = 0)/np.sum(neither_weight_array, axis = 0))                 
+  
     #feed through logit:
     if logit == True:
         logit_coef_black = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Black'), 'coef'].values[0]
