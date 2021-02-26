@@ -106,7 +106,7 @@ cand_race_table = pd.read_csv("Candidate_Race_Party.csv")
 EI_statewide = pd.read_csv("statewide_rxc_EI_preferences.csv")
 prec_ei_df = pd.read_csv("prec_count_quants.csv", dtype = {'CNTYVTD':'str'})
 mean_prec_counts = pd.read_csv("mean_prec_vote_counts.csv", dtype = {'CNTYVTD':'str'})
-logit_params = pd.read_csv('TX_GC1b_FEB_24_21_POCDEM_or_plur_std_logit_params.csv')
+logit_params = pd.read_csv('TX_logit_params.csv')
 
 #initialize state_gdf########################################################
 #reformat/re-index enacted map plans
