@@ -56,7 +56,7 @@ from scipy import stats
 import sys
 from functools import partial
 from run_functions_LA import compute_final_dist, compute_W2, prob_conf_conversion, cand_pref_outcome_sum, \
-cand_pref_all_draws_outcomes, compute_district_weights, precompute_state_weights, compute_align_scores
+cand_pref_all_draws_outcomes, compute_district_weights, precompute_state_weights
 from ast import literal_eval
 #############################################################################################################
 
@@ -89,7 +89,7 @@ white_pop = 'NH_WHITE'
 CVAP = "CVAP18"
 WCVAP = "WCVAP18"
 HCVAP = "HCVAP18"
-BCVAP = "BCVAP18" #with new CVAP codes!
+BCVAP = "BCVAP18" 
 geo_id = 'GEOID10'
 C_X = "C_X"
 C_Y = "C_Y"
@@ -200,9 +200,9 @@ def final_elec_model(partition):
     the set's weight is accrued. The ratio of the accrued points points to the total possible points
     is the raw Black -effectiviness score for the district. 
     
-    After the raw scores are computed, they are adjusted using an "Alignment" (also known as
-    "Group Control) score, which measures the share of votes cast for a minority-preferred 
-    candidate by the minority group itself.
+    Raw scores are adjusted by multiplying them by a "Group Control" factor,
+    which measures the share of votes cast 
+    for a minority-preferred candidate by the minority group itself.
     
     Finally, the adjusted Black-effectiveness score is fed through a logit function,
     transforming it into a probability that districts are Black-effective.
@@ -211,7 +211,7 @@ def final_elec_model(partition):
     whose columns are districts and rows are election sets (or sometimes individual elections)
     These dataframes each store one of the following: Black preferred candidates (in the
     election set's primary), Black preferred candidates in runoffs, winners of primary,
-    runoff and general elections, election winners, weights W1, W2 and W3, Alignment scores
+    runoff and general elections, election winners, weights W1, W2 and W3, 
     and final election set weight for Black voters.
     """
     ###########################################################
@@ -242,24 +242,19 @@ def final_elec_model(partition):
         map_winners[i] = [max(dist_elec_results[elec][i].items(), key=operator.itemgetter(1))[0] for elec in elections]
 
     ###########################################################################################
-    #If we compute statewide modes: compute alignment/group-control scores for each district #################
-    #and final probability distributions
-    if record_statewide_modes: 
-        black_align_prim_state = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                        black_pref_cands_prim_state, elec_match_dict, mean_prec_counts, geo_id)
-       
-    
+    #If we compute statewide modes: compute effectiveness probabilities for each district #################
+    if record_statewide_modes:     
     #district probability distribution: statewide
         final_state_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
                                 black_weight_state, dist_elec_results, dist_changes,\
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                                black_align_prim_state, "statewide", logit_params, logit = True)
+                                "statewide", partition, logit_params, logit = True)
         
         #district probability distribution: equal
         final_equal_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_state, \
                                 black_weight_equal, dist_elec_results, dist_changes,
                                 cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                                black_align_prim_state, "equal", logit_params, logit = True)
+                                "equal", partition, logit_params, logit = True)
     
         
     if record_district_mode: 
@@ -268,14 +263,10 @@ def final_elec_model(partition):
                                  geo_id, primary_elecs, elec_match_dict, bases, outcomes,\
                                  recency_W1, cand_race_dict, min_cand_weights_dict)
         
-        black_align_prim_dist = compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                                                      black_pref_cands_prim_dist, elec_match_dict, \
-                                                      mean_prec_counts, geo_id)
-
         final_dist_prob_dict = compute_final_dist(map_winners, black_pref_cands_prim_dist,
                                black_weight_dist, dist_elec_results, dist_changes,
                                cand_race_table, num_districts, candidates, elec_sets, elec_set_dict, \
-                               black_align_prim_dist, 'district', logit_params, logit = True)
+                               'district', partition, logit_params, logit = True)
 
     #new vector of probability distributions-by-district is the same as last ReCom step, 
     #except in 2 changed districts 

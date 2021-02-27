@@ -111,32 +111,6 @@ def compute_district_weights(dist_changes, elec_sets, elec_set_dict, state_gdf, 
     
     return black_weight_dist, black_pref_cands_prim_dist
            
-def compute_align_scores(dist_changes, elec_sets, state_gdf, partition, primary_elecs, \
-                         black_pref_cands_prim, elec_match_dict, \
-                         mean_prec_counts, geo_id):
-    
-    """ 
-    Computes alignment (also known as "group control") scores in primary elections.
-    Alignment scores vary by district in both statewide and district scores, as it computes
-    the number of votes cast by Black voters for their preferred candidates in
-    each district.
-    """
-    black_align_prim = np.empty((len(elec_sets),0), float)
-
-    for district in dist_changes:        
-        state_gdf["New Map"] = state_gdf.index.map(dict(partition.assignment))
-        dist_prec_list =  list(state_gdf[state_gdf["New Map"] == district][geo_id])        
-        cand_counts_dist = mean_prec_counts[mean_prec_counts[geo_id].isin(dist_prec_list)]
-        
-        black_align_dist = [sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand])/\
-                            (sum(cand_counts_dist["BCVAP"+ '.' + black_pref_cand]) + \
-                             sum(cand_counts_dist["WCVAP"+ '.' + black_pref_cand]) + \
-                             sum(cand_counts_dist["OCVAP"+ '.' + black_pref_cand])) for \
-                             black_pref_cand in black_pref_cands_prim[district]]
-        
-        black_align_prim = np.append(black_align_prim, np.array([black_align_dist]).transpose(), axis = 1)                
-    
-    return black_align_prim
            
 def prob_conf_conversion(cand_prob):
     #parameters chosen to be 0-ish confidence until 50% then rapid ascenion to high confidence
@@ -146,8 +120,7 @@ def prob_conf_conversion(cand_prob):
 def compute_final_dist(map_winners, black_pref_cands_df,
                  black_weight_array, dist_elec_results, dist_changes,
                  cand_race_table, num_districts, candidates, \
-                 elec_sets, elec_set_dict, black_align_prim, \
-                 mode, logit_params, logit = False):
+                 elec_sets, elec_set_dict, mode, partition, logit_params, logit = False):
     
     """
     Returns Black-effectiveness probabilities for each district. 
@@ -203,9 +176,11 @@ def compute_final_dist(map_winners, black_pref_cands_df,
     
     black_points_accrued = black_weight_array*black_pref_wins    
 ########################################################################################
-    #Compute district probabilities: black, Latino, neither and overlap 
-    black_vra_prob = list(np.sum(black_points_accrued*black_align_prim, axis = 0)/np.sum(black_weight_array, axis = 0))             
-    
+    #Compute district probabilities: black, Latino, neither and overlap      
+    black_vra_elec_wins = list(np.sum(black_points_accrued, axis = 0)/np.sum(black_weight_array, axis = 0))             
+    black_gc = [min(1,(partition["BCVAP"][i]/partition["CVAP"][i])*2) for i in sorted(dist_changes)]
+    black_vra_prob = [i*j for i,j in zip(black_vra_elec_wins, black_gc)]
+
     #feed through logit:
     if logit == True:
         logit_coef_black = logit_params.loc[(logit_params['model_type'] == mode) & (logit_params['subgroup'] == 'Black'), 'coef'].values[0]
