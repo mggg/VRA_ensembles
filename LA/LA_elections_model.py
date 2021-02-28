@@ -64,7 +64,7 @@ from ast import literal_eval
 total_steps = 1000
 pop_tol = .01  
 run_name = 'LA_neutral_Cong_run' 
-start_map = 'CD' # CD or 'new_seed'
+start_map = 'SEND' # CD or 'new_seed'
 effectiveness_cutoff = .65
 ensemble_inclusion = False
 record_statewide_modes = True
