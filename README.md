@@ -48,7 +48,7 @@ These are the only values in the model the user has to change. They are near the
 ### Output Files ###
 These files will be stored in the 'outputs' folder of your local directory.
 
-* ***store_plans***: Every 500th plan is stored in this file. The first two columns are VTD IDs and indices, and each subsequent column has their district assignments for a plan.
+* ***store_plans***: Every nth plan is stored in this file, where n is the user-set *store_interval*. The first two columns are VTD IDs and indices, and each subsequent column has their district assignments for a plan.
 * ***hisp_prop_df***: Each column is a district, and each row has the HCVAP shares of district CVAP for a plan.
 * ***black_prop_df***: Each column is a district, and each row has the BCVAP shares of district CVAP for a plan.
 * ***white_prop_df***: Each column is a district, and each row has the WCVAP shares of district CVAP for a plan.
