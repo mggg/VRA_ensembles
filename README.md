@@ -4,13 +4,13 @@ This code repository has the Texas and Louisiana elections models, their input d
 
 ## Texas
 
-*TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data. The only parameters for the user to enter are the 'User Input Parameters' in *TX_elections_model*. They are described below.
+*TX_elections_model* is the main model file and the *run_functions* file has supporting functions. The user can run a neutral ReCom chain, a constrained (rejection sampling) chain based on district VRA-effectiveness scores, or a constrained chain based on district demographic data. The only parameters for the user to enter are the 'User Input Parameters' in *TX_elections_model.py*. They are described below.
 
-To get started, download *all* input files into the same local directory. Running the *TX_elections_model.py* script (or 'python TX_elections_model.py' in the command line from your local directory) will make an 'outputs' folder in the same directory.
+To get started, download *all* input files - including the additional files linked below - into the same local *'TX/* directory. Running the *TX_elections_model.py* script (or 'python TX_elections_model.py' in the command line from the *TX/* directory) will make an 'outputs' folder in the same directory.
 
 ### Data and Input Files ###
 
-All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be downloaded [HERE](https://www.dropbox.com/sh/k78n2hyixmv9xdg/AABmZG5ntMbXtX1VKThR7_t8a?dl=0). 
+All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be downloaded (and added to you *TX/* folder) [HERE](https://www.dropbox.com/sh/k78n2hyixmv9xdg/AABmZG5ntMbXtX1VKThR7_t8a?dl=0). 
 
 * ***Candidate_Race_Party***: This file has every statewide candidate in each race used in the model. It also has their race and party affiliation.
 * ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
