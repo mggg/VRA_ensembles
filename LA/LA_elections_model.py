@@ -497,11 +497,11 @@ for step in chain:
     sen16_df.loc[step_Num % store_interval] = [value for _,value in sorted(zip(keys,values))]
        
     if record_statewide_modes:
-        final_state_prob_df.loc[step_Num] = list(final_state_prob.values())                
-        final_equal_prob_df.loc[step_Num] = list(final_equal_prob.values())               
+        final_state_prob_df.loc[step_Num % store_interval] = list(final_state_prob.values())                
+        final_equal_prob_df.loc[step_Num % store_interval] = list(final_equal_prob.values())               
    
     if record_district_mode:
-        final_dist_prob_df.loc[step_Num] = list(final_dist_prob.values())                
+        final_dist_prob_df.loc[step_Num % store_interval] = list(final_dist_prob.values())                
 
     #store plans     
     if (step_Num - last_step_stored) == store_interval or step_Num == 0:          
