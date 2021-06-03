@@ -10,7 +10,7 @@ To get started, download *all* input files - including the additional files link
 
 ### Data and Input Files ###
 
-All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be downloaded (and added to you *TX/* folder) [HERE](https://www.dropbox.com/sh/k78n2hyixmv9xdg/AABmZG5ntMbXtX1VKThR7_t8a?dl=0). 
+All input files are in this code repository, except for 3 files that were too large to store here. They are the Texas VTD shapefile (with electoral data attached) and two files that have precinct-level EI data. They can be downloaded (and added to your *TX/* folder) [HERE](https://www.dropbox.com/sh/k78n2hyixmv9xdg/AABmZG5ntMbXtX1VKThR7_t8a?dl=0). 
 
 * ***Candidate_Race_Party***: This file has every statewide candidate in each race used in the model. It also has their race and party affiliation.
 * ***TX_columns***: Full column names for electoral data used in the shapefile. This file is needed because shapefiles have a 10 character limit.
