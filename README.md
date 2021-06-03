@@ -1,6 +1,6 @@
 # VRA_article
 
-This code repository has the Texas and Louisiana elections models, their input data and files. 
+This code repository has the Texas and Louisiana elections models, input data, and files to the MGGG paper ['Computational Redistricting and the Voting Rights Act'](https://mggg.org/uploads/VRA-preprint.pdf). 
 
 ## Texas
 
